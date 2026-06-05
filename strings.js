@@ -1,0 +1,136 @@
+export const STRINGS = {
+  brand: "100GIGZ",
+  auth: {
+    access: "Access",
+    publicView: "PUBLIC VIEW",
+    memberView: "MEMBER VIEW",
+    adminView: "ADMIN VIEW",
+    loading: "2026 LOADING..",
+    configMissing: "CONFIG MISSING.",
+    rulesBlocked: "RULES BLOCKED.",
+    signInButton: "Sign In With Google",
+    signOutButton: "Sign Out",
+    signingIn: "SIGNING IN WITH GOOGLE...",
+    showAdminPanels: "Show Admin Panels",
+    openMenu: "Open Menu",
+  },
+  members: {
+    panelTitle: "Members",
+    countLabel: "MEMBERS",
+    empty: "EMPTY",
+    unknown: "Unknown Member",
+    you: "YOU",
+    guestPrompt: "SIGN IN",
+    role: {
+      friend: "MEMBER",
+      admin: "ADMIN",
+      owner: "OWNER",
+    },
+    deleteProfile: "Delete Profile",
+    deleteProfileConfirm: (name) => `Delete ${name}'s profile from 100GIGZ?`,
+    deleteProfileDone: (name) => `${name.toUpperCase()} PROFILE DELETED`,
+  },
+  trips: {
+    listTitle: "TRIP DB",
+    countLabel: "TRIPS",
+    foldersLabel: "FOLDERS",
+    objectsLabel: "OBJECTS",
+    collapseTrip: "Collapse",
+    expandTrip: "Expand",
+    noTrips: "No trips available yet.",
+    deleteTrip: "Delete Trip",
+    moveTripUp: "Move Up",
+    moveTripDown: "Move Down",
+    removed: (slug) => `${slug.toUpperCase()}/ REMOVED`,
+  },
+  uploads: {
+    panelTitle: "Contribute",
+    uploadTitle: "Upload Media",
+    descriptionLabel: "Description",
+    descriptionPlaceholder: "OPTIONAL DESCRIPTION...",
+    queueTitle: "Upload Queue",
+    queueEmpty: "EMPTY",
+    onlyMedia: "ONLY IMAGES AND VIDEOS ARE ALLOWED.",
+    signInRequired: "SIGN IN TO UPLOAD MEDIA.",
+    textSignInRequired: "SIGN IN TO ADD TEXT POSTS.",
+    storageNotReady:
+      "FIREBASE STORAGE IS NOT READY. VERIFY THE STORAGE BUCKET IS ENABLED.",
+    maxVideos: "MAX 10 VIDEOS EVERY 24 HOURS.",
+    maxVideoSize: "MAX 500MB PER VIDEO.",
+    uploadComplete: "UPLOAD COMPLETE",
+    uploadFailed: "UPLOAD FAILED",
+    summary: (successCount, failureCount) =>
+      `${String(successCount).padStart(2, "0")} FILES UPLOADED / ${String(
+        failureCount
+      ).padStart(2, "0")} FAILED`,
+    authorPrefix: "BY",
+    genericFile: "Open File",
+  },
+  admin: {
+    title: "Admin Tools",
+    tripCreateTitle: "New Trip",
+    folderCreateTitle: "New Folder",
+    textPostTitle: "New Text Post",
+    addTextPost: "Add Text Post",
+    editTextPostTitle: "Edit Text Post",
+    saveTextPost: "Save Changes",
+    cancelEdit: "Cancel Edit",
+  },
+  items: {
+    sortLabel: "Sort",
+    sortMediaDateDesc: "Date: Newest",
+    sortMediaDateAsc: "Date: Oldest",
+    sortRecentlyAdded: "Recently Added",
+    nameColumn: "Name",
+    typeColumn: "Type",
+    previewColumn: "Preview",
+    authorColumn: "Author",
+    metaColumn: "Meta",
+    post: "POST",
+    textPost: "TEXT POST",
+    edit: "Edit",
+    emptyName: "EMPTY",
+    noObjects: "> NO OBJECTS YET",
+    delete: "Delete",
+    itemRemoved: (name) => `${name.toUpperCase()} REMOVED`,
+  },
+  errors: {
+    initFailed: "Initialization failed.",
+    runtimeConfigMissing:
+      "Runtime config is incomplete. Fill in the Firebase values in .env.",
+    userSyncFailed: "Could not sync user record.",
+    signOutFailed: "Could not sign out.",
+    tripCreateFailed: "Could not create trip.",
+    folderCreateFailed: "Could not create folder.",
+    textPostFailed: "Could not add text post.",
+    roleUpdateFailed: "Could not update role.",
+    itemDeleteFailed: "Could not delete item.",
+    profileDeleteFailed: "Could not delete profile.",
+    tripDeleteFailed: "Could not delete trip.",
+    tripMoveFailed: "Could not move trip.",
+  },
+  firebase: {
+    firestoreRulesBlocked:
+      "PUBLISH FIRESTORE RULES. PUBLIC TRIP FOLDER READS ARE CURRENTLY BLOCKED.",
+    friendsRulesBlocked:
+      "PUBLISH FIRESTORE USER RULES SO SIGNED-IN MEMBERS CAN SEE THE MEMBERS PANEL.",
+    googleConfigMissing: "ENABLE GOOGLE IN FIREBASE AUTHENTICATION, THEN TRY AGAIN.",
+    googleOperationNotAllowed:
+      "GOOGLE SIGN-IN IS NOT ENABLED FOR THIS FIREBASE PROJECT.",
+    googleUnauthorizedDomain:
+      "ADD LOCALHOST TO AUTHORIZED DOMAINS IN FIREBASE AUTH SETTINGS.",
+    googlePopupBlocked: "POPUP WAS BLOCKED. ALLOW POPUPS AND TRY AGAIN.",
+    googlePopupClosed: "SIGN-IN WINDOW WAS CLOSED BEFORE COMPLETION.",
+    storageUnauthorized: "STORAGE RULES BLOCKED THIS UPLOAD.",
+    storageBucketMissing: "ENABLE FIREBASE STORAGE FOR THIS PROJECT FIRST.",
+    storageCanceled: "UPLOAD CANCELED.",
+    storageUnknown:
+      "UPLOAD FAILED BEFORE STORAGE ACCEPTED THE REQUEST. ENABLE FIREBASE STORAGE, MAKE SURE THE PROJECT IS ON BLAZE, AND VERIFY THE STORAGE BUCKET IS ACTIVE.",
+    storageTimedOut:
+      "UPLOAD TIMED OUT. IF STORAGE IS NEW, FINISH FIREBASE STORAGE SETUP AND TRY AGAIN.",
+  },
+};
+
+export function padCount(value, label) {
+  return `${String(value).padStart(4, "0")} ${label}`;
+}

@@ -1,0 +1,177 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isBootstrapAdminEmail(email) {
+      return email in [
+        'erictatch@gmail.com'
+      ];
+    }
+
+    function isBootstrapAdmin() {
+      return isSignedIn() && isBootstrapAdminEmail(request.auth.token.email);
+    }
+
+    function userDocPath(userId) {
+      return /databases/$(database)/documents/users/$(userId);
+    }
+
+    function userDocExists() {
+      return isSignedIn() && exists(userDocPath(request.auth.uid));
+    }
+
+    function currentUserRole() {
+      return userDocExists()
+        ? get(userDocPath(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isMember() {
+      return isSignedIn() && (isBootstrapAdmin() || userDocExists());
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrapAdmin() ||
+        currentUserRole() in ['owner', 'admin']
+      );
+    }
+
+    function isValidRole(role, email) {
+      return (
+        isBootstrapAdminEmail(email) && role == 'owner'
+      ) || (
+        !isBootstrapAdminEmail(email) && role in ['friend', 'admin']
+      );
+    }
+
+    function hasStableIdentity(userId) {
+      return request.resource.data.uid == userId
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.photoURL is string;
+    }
+
+    function isValidUserState(userId) {
+      return hasStableIdentity(userId)
+        && request.resource.data.isAdmin == (request.resource.data.role in ['owner', 'admin'])
+        && isValidRole(request.resource.data.role, request.resource.data.email);
+    }
+
+    function isValidSelfCreate(userId) {
+      return request.auth.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && isValidUserState(userId)
+        && (
+          (isBootstrapAdmin() && request.resource.data.role == 'owner') ||
+          (!isBootstrapAdmin() && request.resource.data.role == 'friend')
+        );
+    }
+
+    function isValidSelfUpdate() {
+      return request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.isAdmin == resource.data.isAdmin;
+    }
+
+    function isValidAdminUpdate(userId) {
+      return resource != null
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && isValidUserState(userId);
+    }
+
+    function isValidMemberMediaCreate() {
+      return isMember()
+        && request.resource.data.kind == 'file'
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.uploadedByUid == request.auth.uid
+        && request.resource.data.mimeType is string
+        && request.resource.data.downloadURL is string
+        && request.resource.data.storagePath is string
+        && request.resource.data.authorLabel is string
+        && request.resource.data.mediaCategory in ['image', 'video', 'file']
+        && request.resource.data.size is number;
+    }
+
+    function isValidMemberTextCreate() {
+      return isMember()
+        && request.resource.data.kind == 'text'
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByEmail == request.auth.token.email
+        && request.resource.data.title is string
+        && request.resource.data.body is string
+        && request.resource.data.name is string
+        && request.resource.data.mimeType == 'text/plain'
+        && request.resource.data.authorLabel is string;
+    }
+
+    function isTextAuthor() {
+      return isMember()
+        && resource.data.kind == 'text'
+        && (
+          resource.data.createdByUid == request.auth.uid ||
+          (
+            (resource.data.createdByUid == null || resource.data.createdByUid == '')
+            && resource.data.createdByEmail == request.auth.token.email
+          )
+        );
+    }
+
+    function isValidMemberTextUpdate() {
+      return isTextAuthor()
+        && request.resource.data.kind == 'text'
+        && request.resource.data.title is string
+        && request.resource.data.body is string
+        && request.resource.data.name is string
+        && request.resource.data.mimeType == 'text/plain'
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByEmail == request.auth.token.email
+        && request.resource.data.authorLabel is string
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title',
+          'body',
+          'name',
+          'authorLabel',
+          'createdByUid',
+          'createdByEmail',
+          'updatedAt',
+          'updatedByUid',
+          'updatedByEmail'
+        ]);
+    }
+
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId || isMember();
+      allow create: if isSignedIn() && isValidSelfCreate(userId);
+      allow update: if isSignedIn()
+        && (
+          (request.auth.uid == userId && isValidSelfUpdate()) ||
+          (isAdmin() && isValidAdminUpdate(userId))
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /trips/{tripId} {
+      allow read: if request.auth == null || isMember();
+      allow create, update, delete: if isAdmin();
+
+      match /folders/{folderId} {
+        allow read: if request.auth == null || isMember();
+        allow create, update, delete: if isAdmin();
+
+        match /items/{itemId} {
+          allow read: if request.auth == null || isMember();
+          allow create: if isAdmin() || isValidMemberMediaCreate() || isValidMemberTextCreate();
+          allow update: if isAdmin() || isValidMemberTextUpdate();
+          allow delete: if isAdmin();
+        }
+      }
+    }
+  }
+}

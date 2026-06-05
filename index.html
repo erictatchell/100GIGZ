@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>100GIGZ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Teko:wght@500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body class="min-h-screen overflow-hidden bg-neutral-950 text-stone-100 [color-scheme:dark] font-['Arial_Narrow','Helvetica_Neue',Arial,sans-serif]">
+  <div aria-hidden="true" class="pointer-events-none fixed inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.035),transparent_16%),radial-gradient(circle_at_top,rgba(255,255,255,0.055),transparent_36%),linear-gradient(to_right,transparent,rgba(255,255,255,0.02),transparent)]"></div>
+  <div aria-hidden="true" class="pointer-events-none fixed inset-0 opacity-15 mix-blend-screen bg-[repeating-linear-gradient(to_bottom,rgba(255,255,255,0.03)_0,rgba(255,255,255,0.03)_1px,transparent_1px,transparent_3px)]"></div>
+  <div aria-hidden="true" class="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_center,transparent_60%,rgba(0,0,0,0.58)_100%)]"></div>
+
+  <section id="vault-gate" class="fixed inset-0 z-[60] flex items-center justify-center bg-black transition-opacity duration-700">
+    <canvas id="vault-frame" class="absolute inset-0 h-full w-full"></canvas>
+    <video id="vault-video" class="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500" preload="auto" playsinline muted>
+      <source src="/assets/vault-intro.mp4" type="video/mp4">
+    </video>
+    <div aria-hidden="true" class="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.08),transparent_22%,rgba(0,0,0,0.2)_78%,rgba(0,0,0,0.38))]"></div>
+
+    <div class="absolute inset-x-0 bottom-10 z-10 flex justify-center px-4 sm:bottom-12">
+      <div class="w-full max-w-md">
+        <p id="vault-status" class="mb-3 hidden text-center font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100/78"></p>
+        <form id="vault-form" class="flex items-stretch justify-center gap-2">
+          <input id="vault-password-input" name="password" type="password" autocomplete="current-password" class="min-w-0 flex-1 border border-white/18 bg-black/14 px-4 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] tracking-[0.18em] text-stone-100 outline-none backdrop-blur-[1px] transition placeholder:text-stone-200/52 focus:border-white/32" placeholder="KEY" required>
+          <button id="vault-submit-button" type="submit" class="shrink-0 border border-white/18 bg-black/14 px-6 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.18em] text-stone-100 backdrop-blur-[1px] transition hover:border-white/32 hover:bg-white/[0.04]">
+            Unlock
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <main id="site-shell" aria-hidden="true" class="pointer-events-none relative m-3 min-h-[calc(100vh-1.5rem)] border border-white/10 bg-black/80 px-5 py-6 opacity-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025),0_0_80px_rgba(255,255,255,0.08)] transition-opacity duration-700 sm:m-6 sm:min-h-[calc(100vh-3rem)] sm:px-7 sm:py-7 md:px-12 md:py-10 lg:px-16 lg:py-14">
+    <div aria-hidden="true" class="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent_24%)]"></div>
+
+    <div class="relative">
+      <button id="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu-panel" class="fixed right-5 top-5 z-40 border border-white/12 bg-black/55 px-3 py-3 text-stone-100 shadow-[0_12px_48px_rgba(0,0,0,0.4)] backdrop-blur-sm transition hover:border-white/30 hover:bg-black/70 xl:hidden">
+        <span id="mobile-menu-toggle-label" class="sr-only">Open Menu</span>
+        <span aria-hidden="true" class="flex flex-col gap-1.5">
+          <span class="block h-px w-5 bg-current"></span>
+          <span class="block h-px w-5 bg-current"></span>
+          <span class="block h-px w-5 bg-current"></span>
+        </span>
+      </button>
+
+      <div id="mobile-menu-backdrop" class="fixed inset-0 z-30 hidden bg-black/60 xl:hidden"></div>
+
+      <aside id="mobile-menu-panel" class="fixed right-3 top-20 z-40 hidden w-[min(26rem,calc(100vw-1.5rem))] max-h-[calc(100vh-6rem)] overflow-auto border border-white/10 bg-neutral-950/96 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.55)] backdrop-blur-md xl:hidden">
+        <div id="mobile-menu-content" class="space-y-4">
+          <div id="mobile-admin-panel-slot"></div>
+
+          <details id="friends-mobile-panel" class="border border-white/10 bg-white/[0.03]">
+            <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-4 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100">
+              <span id="friends-mobile-title">Members</span>
+              <span id="friends-mobile-count" class="text-stone-300/60">0000 MEMBERS</span>
+            </summary>
+            <div class="border-t border-white/10 px-4 py-4">
+              <p id="friends-mobile-status" class="hidden font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/60">
+              </p>
+              <div id="friends-mobile-list" class="mt-4 space-y-2"></div>
+            </div>
+          </details>
+        </div>
+      </aside>
+
+      <header class="flex flex-col gap-8 border-b border-white/10 pb-8 xl:flex-row xl:items-start xl:justify-between">
+        <div class="max-w-3xl">
+          <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.35em] text-stone-300/65 sm:text-[0.8rem]">
+            100GIGZ / ARCHIVE
+          </p>
+          <h1 id="logo" class="mt-3 font-['Teko',sans-serif] text-[clamp(3.4rem,13vw,8.6rem)] font-medium uppercase leading-[0.72] tracking-[0.08em] text-stone-100 opacity-100 transition-[opacity,transform] duration-[1400ms] ease-out sm:tracking-[0.12em]">
+            100GIGZ 
+          </h1>
+          <p class="mt-4 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.28em] text-stone-300/58 sm:text-[0.72rem]">
+            Featured Message
+          </p>
+          <p id="loading-text" class="mt-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.92rem] uppercase tracking-[0.22em] text-stone-200/72 sm:text-[1rem] sm:tracking-[0.28em]">
+            &gt; 2026 LOADING..
+          </p>
+        </div>
+
+        <aside class="w-full max-w-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p id="auth-access-label" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/65">
+                Access
+              </p>
+              <p id="auth-status" class="mt-2 text-lg uppercase tracking-[0.18em] text-stone-100">
+                PUBLIC VIEW
+              </p>
+              <p id="auth-detail" class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs uppercase tracking-[0.18em] text-stone-300/60">
+              </p>
+            </div>
+
+            <div class="flex flex-col items-start gap-3 sm:items-end">
+              <label id="admin-panels-control" class="hidden items-center gap-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-200/82">
+                <span id="admin-panels-toggle-text">Show Admin Panels</span>
+                <span class="relative inline-flex h-5 w-10 items-center rounded-full border border-white/12 bg-white/[0.04] transition">
+                  <input id="admin-panels-toggle" type="checkbox" class="peer sr-only">
+                  <span class="absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-stone-200/80 transition peer-checked:translate-x-4 peer-checked:bg-amber-200"></span>
+                </span>
+              </label>
+              <button id="google-signin-button" type="button" class="hidden border border-white/12 px-4 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.22em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+                Sign In With Google
+              </button>
+              <button id="sign-out-button" type="button" class="hidden border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.22em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]">
+                Sign Out
+              </button>
+            </div>
+          </div>
+
+          <div id="auth-warning" class="mt-4 hidden border border-amber-300/20 bg-amber-300/8 p-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs uppercase tracking-[0.16em] text-amber-100/85">
+            CONFIG MISSING.
+          </div>
+        </aside>
+      </header>
+
+      <div class="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+        <div class="min-w-0">
+      <div id="desktop-control-panel-slot">
+      <details id="admin-panel" class="hidden border border-dashed border-amber-300/70 bg-amber-100/[0.04] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.08)] group">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5 sm:py-5">
+          <p id="control-panel-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-amber-100/78">
+            Admin Tools
+          </p>
+          <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.22em] text-amber-100/62">
+            Menu
+          </span>
+        </summary>
+
+        <div class="border-t border-amber-200/18 px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
+        <div class="grid gap-5 2xl:grid-cols-2">
+          <form id="trip-form" class="space-y-4 border border-white/10 p-4">
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] text-stone-300/65">
+              New Trip
+            </p>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Trip label</span>
+              <input id="trip-label-input" name="tripLabel" maxlength="40" placeholder="MONTREAL 25" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Trip folder slug</span>
+              <input id="trip-slug-input" name="tripSlug" maxlength="40" placeholder="mtl-25" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm lowercase tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Folder seeds</span>
+              <input id="trip-folders-input" name="tripFolders" maxlength="120" placeholder="thu,fri,sat,sun,mon,movie" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm lowercase tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35">
+            </label>
+
+            <button type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+              Create Trip
+            </button>
+          </form>
+
+          <form id="folder-form" class="space-y-4 border border-white/10 p-4">
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] text-stone-300/65">
+              New Folder
+            </p>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Trip</span>
+              <select id="folder-trip-select" name="tripId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Folder name</span>
+              <input id="folder-name-input" name="folderLabel" maxlength="24" placeholder="fri" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm lowercase tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
+            </label>
+
+            <button type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+              Create Folder
+            </button>
+          </form>
+
+          <form id="upload-form" class="space-y-4 border border-white/10 p-4">
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] text-stone-300/65">
+              Upload Media
+            </p>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Trip</span>
+              <select id="upload-trip-select" name="tripId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Folder</span>
+              <select id="upload-folder-select" name="folderId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Files</span>
+              <input id="upload-files-input" name="files" type="file" multiple accept="image/*,video/*" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition file:mr-4 file:border-0 file:bg-white/8 file:px-3 file:py-2 file:font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] file:text-[0.68rem] file:uppercase file:tracking-[0.18em] file:text-stone-200 focus:border-white/35" required>
+            </label>
+
+            <label class="block">
+              <span id="upload-description-label" class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Description</span>
+              <textarea id="upload-description-input" name="description" rows="3" maxlength="800" placeholder="OPTIONAL DESCRIPTION..." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35"></textarea>
+            </label>
+
+            <button type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+              Upload Selected Files
+            </button>
+          </form>
+
+          <form id="text-post-form" class="space-y-4 border border-white/10 p-4">
+            <p id="text-post-form-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] text-stone-300/65">
+              New Text Post
+            </p>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Trip</span>
+              <select id="text-trip-select" name="tripId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Folder</span>
+              <select id="text-folder-select" name="folderId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Post title</span>
+              <input id="text-title-input" name="title" maxlength="60" placeholder="DAY NOTES" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Body</span>
+              <textarea id="text-body-input" name="body" rows="5" maxlength="8000" placeholder="POST BODY..." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required></textarea>
+            </label>
+
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <button id="text-post-submit-button" type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+                Add Text Post
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <section class="mt-5 border border-white/10 p-4">
+          <div class="flex flex-col gap-2 border-b border-white/10 pb-3">
+            <p id="upload-queue-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/65">
+              Upload Queue
+            </p>
+          </div>
+          <div id="upload-status-list" class="mt-4 space-y-2"></div>
+        </section>
+        </div>
+      </details>
+      </div>
+
+      <section class="mt-8">
+        <div class="flex items-center justify-between border-b border-white/10 pb-4">
+          <p id="trip-db-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/65">
+            TRIP DB
+          </p>
+          <p id="trip-count" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.22em] text-stone-300/65">
+            0000 TRIPS
+          </p>
+        </div>
+
+        <div id="trip-list" class="mt-6 space-y-6"></div>
+      </section>
+        </div>
+
+        <aside class="hidden border border-white/10 bg-white/[0.03] p-5 xl:sticky xl:top-8 xl:block">
+          <div class="flex items-end justify-between border-b border-white/10 pb-4">
+            <div>
+              <p id="friends-desktop-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/65">
+                Members
+              </p>
+            </div>
+            <p id="friends-desktop-count" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.22em] text-stone-300/60">
+              0000 MEMBERS
+            </p>
+          </div>
+
+          <p id="friends-desktop-status" class="mt-4 hidden font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/60">
+          </p>
+
+          <div id="friends-desktop-list" class="mt-5 space-y-2"></div>
+        </aside>
+      </div>
+
+      <div id="edit-post-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
+        <div id="edit-post-backdrop" class="absolute inset-0 bg-black/72 backdrop-blur-sm"></div>
+
+        <form id="edit-post-form" class="relative w-full max-w-3xl border border-amber-300/55 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.58)]">
+          <div class="flex flex-col gap-3 border-b border-amber-200/18 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+            <div class="min-w-0">
+              <p id="edit-post-form-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-amber-100/78">
+                Edit Text Post
+              </p>
+              <p id="edit-post-context" class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/64">
+              </p>
+            </div>
+            <button id="edit-post-close-button" type="button" class="border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]">
+              Cancel Edit
+            </button>
+          </div>
+
+          <div class="space-y-4 px-5 py-5 sm:px-6 sm:py-6">
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Post title</span>
+              <input id="edit-post-title-input" name="title" maxlength="60" placeholder="DAY NOTES" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Body</span>
+              <textarea id="edit-post-body-input" name="body" rows="8" maxlength="8000" placeholder="POST BODY..." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required></textarea>
+            </label>
+          </div>
+
+          <div class="flex flex-col gap-3 border-t border-white/10 px-5 py-5 sm:flex-row sm:justify-end sm:px-6">
+            <button id="edit-post-cancel-button" type="button" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] sm:w-auto sm:min-w-44">
+              Cancel Edit
+            </button>
+            <button id="edit-post-save-button" type="submit" class="w-full border border-amber-300/38 bg-amber-100/[0.04] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08] sm:w-auto sm:min-w-44">
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

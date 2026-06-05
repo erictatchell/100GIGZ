@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isBootstrapAdminEmail(email) {
+      return email in [
+        'erictatch@gmail.com'
+      ];
+    }
+
+    function userDocExists() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function currentUserRole() {
+      return userDocExists()
+        ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isMember() {
+      return isSignedIn() && (
+        isBootstrapAdminEmail(request.auth.token.email) || userDocExists()
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrapAdminEmail(request.auth.token.email) ||
+        currentUserRole() in ['owner', 'admin']
+      );
+    }
+
+    function isAllowedUpload() {
+      return request.resource != null
+        && request.resource.size <= 500 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|video/.*');
+    }
+
+    match /trips/{tripSlug}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isMember() && isAllowedUpload();
+      allow delete: if isAdmin();
+    }
+  }
+}
