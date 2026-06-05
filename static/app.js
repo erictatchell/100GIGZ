@@ -158,6 +158,7 @@ let vaultState = {
   configured: false,
   unlocked: false,
   videoPath: "/assets/vault-intro.mp4",
+  message: "",
 };
 let appInitializationPromise = null;
 let vaultIntroPlaying = false;
@@ -252,6 +253,9 @@ function applyStaticStrings() {
 }
 
 async function initializeVaultExperience() {
+  applyVaultVideoSource(vaultState.videoPath);
+  prepareVaultBackdrop();
+
   vaultState = await loadVaultStatus();
   applyVaultVideoSource(vaultState.videoPath);
   prepareVaultBackdrop();
@@ -261,7 +265,12 @@ async function initializeVaultExperience() {
     showVaultGate();
     setVaultFormEnabled(false);
     setVaultFormVisible(true);
-    setVaultStatusMessage("SET VAULT_PASSWORD IN .ENV.", true);
+    setVaultStatusMessage(
+      String(
+        vaultState.message || STRINGS.errors.vaultPasswordMissingHosted
+      ).toUpperCase(),
+      true
+    );
     return;
   }
 
@@ -330,7 +339,12 @@ async function loadRuntimeConfig() {
   const payload = await readJsonResponse(response);
 
   if (!response.ok) {
-    throw new Error("Could not load runtime configuration from /api/config.");
+    throw new Error(
+      getApiErrorMessage(
+        payload,
+        "Could not load runtime configuration from /api/config."
+      )
+    );
   }
 
   return payload;
@@ -343,13 +357,16 @@ async function loadVaultStatus() {
   const payload = await readJsonResponse(response);
 
   if (!response.ok) {
-    throw new Error("Could not load vault status.");
+    throw new Error(
+      getApiErrorMessage(payload, STRINGS.errors.vaultStatusFailed)
+    );
   }
 
   return {
     configured: Boolean(payload?.configured),
     unlocked: Boolean(payload?.unlocked),
     videoPath: String(payload?.videoPath || "/assets/vault-intro.mp4"),
+    message: String(payload?.message || ""),
   };
 }
 
@@ -503,7 +520,12 @@ async function handleVaultSubmit(event) {
   event.preventDefault();
 
   if (!vaultState.configured) {
-    setVaultStatusMessage("SET VAULT_PASSWORD IN .ENV.", true);
+    setVaultStatusMessage(
+      String(
+        vaultState.message || STRINGS.errors.vaultPasswordMissingHosted
+      ).toUpperCase(),
+      true
+    );
     return;
   }
 
@@ -647,6 +669,14 @@ function getFriendlyVaultMessage(payload) {
   }
 
   return String(payload?.message || "VAULT ACCESS FAILED.").toUpperCase();
+}
+
+function getApiErrorMessage(payload, fallbackMessage) {
+  if (payload && typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message;
+  }
+
+  return fallbackMessage;
 }
 
 function initializeFirebaseIfPossible(firebaseConfig) {

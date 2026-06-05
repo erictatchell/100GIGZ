@@ -10,10 +10,15 @@ loadEnvFile(path.join(workspaceRoot, ".env.local"), true);
 const VAULT_COOKIE_NAME = "vault_access";
 
 export function buildVaultStatus(request) {
+  const configured = isVaultConfigured();
+
   return {
-    configured: isVaultConfigured(),
+    configured,
     unlocked: isVaultUnlocked(request),
     videoPath: "/assets/vault-intro.mp4",
+    message: configured
+      ? ""
+      : "VAULT_PASSWORD is not available to this deployment.",
   };
 }
 

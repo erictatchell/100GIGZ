@@ -48,7 +48,18 @@ export default async function handler(request, response) {
     }
 
     if (pathname === "/api/health" || pathname === "/health") {
-      return sendJson(response, 200, { ok: true, date: new Date().toISOString() });
+      const config = buildPublicConfig();
+      return sendJson(response, 200, {
+        ok: true,
+        date: new Date().toISOString(),
+        vaultConfigured: isVaultConfigured(),
+        firebaseConfigured: Boolean(
+          config.firebaseConfig.apiKey &&
+            config.firebaseConfig.authDomain &&
+            config.firebaseConfig.projectId &&
+            config.firebaseConfig.appId
+        ),
+      });
     }
 
     await serveStaticFile(request, pathname, response);
@@ -61,10 +72,15 @@ export default async function handler(request, response) {
 }
 
 function buildVaultStatus(request) {
+  const configured = isVaultConfigured();
+
   return {
-    configured: isVaultConfigured(),
+    configured,
     unlocked: isVaultUnlocked(request),
     videoPath: "/assets/vault-intro.mp4",
+    message: configured
+      ? ""
+      : "VAULT_PASSWORD is not available to this deployment.",
   };
 }
 
