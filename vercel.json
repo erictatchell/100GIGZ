@@ -22,7 +22,11 @@
   "rewrites": [
     {
       "source": "/health",
-      "destination": "/api/health"
+      "destination": "/api/health.js"
+    },
+    {
+      "source": "/api/((?!.*\\.js$).*)",
+      "destination": "/api/$1.js"
     },
     {
       "source": "/((?!api/|static/|assets/).*)",
