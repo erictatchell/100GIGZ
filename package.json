@@ -8,6 +8,7 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "firebase": "^12.14.0"
+    "firebase": "^12.14.0",
+    "vercel": "^54.9.1"
   }
 }

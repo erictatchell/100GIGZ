@@ -29,7 +29,7 @@ import {
   ref as storageRef,
   uploadBytesResumable,
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
-import { STRINGS, padCount } from "./strings.ts";
+import { STRINGS, padCount } from "./strings.js";
 
 const DAY_FOLDERS = ["thu", "fri", "sat", "sun", "mon"];
 const DEFAULT_TRIPS = [
