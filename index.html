@@ -459,6 +459,39 @@
           </div>
         </form>
       </div>
+
+      <div id="video-preview-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
+        <div id="video-preview-backdrop" class="absolute inset-0 bg-black/82 backdrop-blur-sm"></div>
+
+        <div class="relative w-full max-w-5xl border border-white/12 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.62)]">
+          <div class="flex flex-col gap-3 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+            <div class="min-w-0">
+              <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/72">
+                Clip Preview
+              </p>
+              <p class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.16em] text-stone-300/60">
+                Selected Folder Navigation
+              </p>
+            </div>
+            <button id="video-preview-close-button" type="button" class="border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]">
+              Close Preview
+            </button>
+          </div>
+
+          <div class="px-4 py-4 sm:px-6 sm:py-6">
+            <div class="mb-4 flex items-center justify-between gap-3">
+              <button id="video-preview-prev-button" type="button" class="shrink-0 border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-35">
+                &larr; Prev
+              </button>
+              <p id="video-preview-title" class="min-w-0 flex-1 truncate px-2 text-center text-sm tracking-[0.04em] text-stone-100 sm:text-base"></p>
+              <button id="video-preview-next-button" type="button" class="shrink-0 border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-35">
+                Next &rarr;
+              </button>
+            </div>
+            <video id="video-preview-player" class="max-h-[78vh] w-full bg-black" controls autoplay playsinline preload="metadata"></video>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </body>

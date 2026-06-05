@@ -120,6 +120,13 @@ const editPostBodyInput = document.getElementById("edit-post-body-input");
 const editPostCloseButton = document.getElementById("edit-post-close-button");
 const editPostCancelButton = document.getElementById("edit-post-cancel-button");
 const editPostSaveButton = document.getElementById("edit-post-save-button");
+const videoPreviewModal = document.getElementById("video-preview-modal");
+const videoPreviewBackdrop = document.getElementById("video-preview-backdrop");
+const videoPreviewCloseButton = document.getElementById("video-preview-close-button");
+const videoPreviewTitle = document.getElementById("video-preview-title");
+const videoPreviewPlayer = document.getElementById("video-preview-player");
+const videoPreviewPrevButton = document.getElementById("video-preview-prev-button");
+const videoPreviewNextButton = document.getElementById("video-preview-next-button");
 const ROLE_FRIEND = "friend";
 const ROLE_ADMIN = "admin";
 const ROLE_OWNER = "owner";
@@ -154,6 +161,8 @@ let currentTextPostEdit = null;
 let adminPanelsVisible = false;
 let mobileMenuOpen = false;
 let editPostModalOpen = false;
+let videoPreviewModalOpen = false;
+let currentVideoPreviewContext = null;
 let vaultState = {
   configured: false,
   unlocked: false,
@@ -693,6 +702,10 @@ function setupForms() {
   editPostCloseButton?.addEventListener("click", resetTextPostEditor);
   editPostCancelButton?.addEventListener("click", resetTextPostEditor);
   editPostBackdrop?.addEventListener("click", resetTextPostEditor);
+  videoPreviewCloseButton?.addEventListener("click", resetVideoPreview);
+  videoPreviewBackdrop?.addEventListener("click", resetVideoPreview);
+  videoPreviewPrevButton?.addEventListener("click", () => navigateVideoPreview(-1));
+  videoPreviewNextButton?.addEventListener("click", () => navigateVideoPreview(1));
   signOutButton?.addEventListener("click", handleSignOut);
   adminPanelsToggle?.addEventListener("change", handleAdminPanelsToggleChange);
   mobileMenuToggle?.addEventListener("click", handleMobileMenuToggleClick);
@@ -717,6 +730,25 @@ function handleMobileMenuToggleClick() {
 }
 
 function handleWindowKeydown(event) {
+  if (videoPreviewModalOpen) {
+    if (event.key === "Escape") {
+      resetVideoPreview();
+      return;
+    }
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      navigateVideoPreview(-1);
+      return;
+    }
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      navigateVideoPreview(1);
+      return;
+    }
+  }
+
   if (event.key === "Escape") {
     if (editPostModalOpen) {
       resetTextPostEditor();
@@ -763,6 +795,15 @@ function setEditPostModalOpen(nextOpen) {
   if (editPostModal) {
     editPostModal.classList.toggle("hidden", !editPostModalOpen);
     editPostModal.classList.toggle("flex", editPostModalOpen);
+  }
+}
+
+function setVideoPreviewModalOpen(nextOpen) {
+  videoPreviewModalOpen = Boolean(nextOpen);
+
+  if (videoPreviewModal) {
+    videoPreviewModal.classList.toggle("hidden", !videoPreviewModalOpen);
+    videoPreviewModal.classList.toggle("flex", videoPreviewModalOpen);
   }
 }
 
@@ -1228,7 +1269,7 @@ async function handleUploadSubmit(event) {
 
   const selectedVideoCount = files.filter((file) => isVideoFile(file)).length;
 
-  if (selectedVideoCount > 0) {
+  if (selectedVideoCount > 0 && !isAdmin()) {
     const recentVideoCount = await countRecentVideoUploads(currentUser.uid);
 
     if (recentVideoCount + selectedVideoCount > MAX_VIDEO_UPLOADS_PER_DAY) {
@@ -1656,6 +1697,109 @@ function resetTextPostEditor() {
   setEditPostModalOpen(false);
 }
 
+function openVideoPreview(tripId, folderId, itemId) {
+  if (!videoPreviewPlayer || !tripId || !folderId || !itemId) {
+    return;
+  }
+
+  currentVideoPreviewContext = { tripId, folderId, itemId };
+  const previewState = getCurrentVideoPreviewState();
+
+  if (!previewState) {
+    resetVideoPreview();
+    return;
+  }
+
+  syncVideoPreviewNavigation(previewState);
+  videoPreviewPlayer.pause();
+  videoPreviewPlayer.src = previewState.currentItem.downloadURL;
+  videoPreviewPlayer.currentTime = 0;
+  videoPreviewPlayer.load();
+  setVideoPreviewModalOpen(true);
+
+  window.requestAnimationFrame(() => {
+    const playPromise = videoPreviewPlayer.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
+  });
+}
+
+function navigateVideoPreview(direction) {
+  const previewState = getCurrentVideoPreviewState();
+
+  if (!previewState) {
+    return;
+  }
+
+  const nextItem = previewState.items[previewState.currentIndex + direction];
+
+  if (!nextItem) {
+    return;
+  }
+
+  openVideoPreview(previewState.tripId, previewState.folderId, nextItem.id);
+}
+
+function resetVideoPreview() {
+  currentVideoPreviewContext = null;
+  syncVideoPreviewNavigation(null);
+
+  if (videoPreviewPlayer) {
+    videoPreviewPlayer.pause();
+    videoPreviewPlayer.removeAttribute("src");
+    videoPreviewPlayer.load();
+  }
+
+  setVideoPreviewModalOpen(false);
+}
+
+function getCurrentVideoPreviewState() {
+  if (!currentVideoPreviewContext) {
+    return null;
+  }
+
+  const { tripId, folderId, itemId } = currentVideoPreviewContext;
+  const items = getFolderVideoItems(tripId, folderId);
+  const currentIndex = items.findIndex((item) => item.id === itemId);
+
+  if (currentIndex === -1) {
+    return null;
+  }
+
+  return {
+    tripId,
+    folderId,
+    itemId,
+    items,
+    currentIndex,
+    currentItem: items[currentIndex],
+  };
+}
+
+function getFolderVideoItems(tripId, folderId) {
+  return getSortedItemsForFolder(tripId, folderId, getItemSortMode(tripId, folderId)).filter(
+    (item) => item.kind === "file" && item.mimeType.startsWith("video/")
+  );
+}
+
+function syncVideoPreviewNavigation(previewState = getCurrentVideoPreviewState()) {
+  if (videoPreviewTitle) {
+    videoPreviewTitle.textContent = previewState
+      ? getItemDisplayName(previewState.currentItem)
+      : "";
+  }
+
+  if (videoPreviewPrevButton) {
+    videoPreviewPrevButton.disabled = !previewState || previewState.currentIndex === 0;
+  }
+
+  if (videoPreviewNextButton) {
+    videoPreviewNextButton.disabled =
+      !previewState || previewState.currentIndex >= previewState.items.length - 1;
+  }
+}
+
 function isCurrentUserTextOwner(item) {
   return Boolean(
     currentUser?.uid &&
@@ -1722,6 +1866,13 @@ async function handleRoleSelectChange(event) {
 }
 
 function handleTripBrowserClick(event) {
+  const videoPreviewTrigger = event.target.closest("[data-action='preview-video']");
+
+  if (videoPreviewTrigger) {
+    handleVideoPreviewClick(videoPreviewTrigger);
+    return;
+  }
+
   const tripToggleTrigger = event.target.closest("[data-action='toggle-trip']");
 
   if (tripToggleTrigger) {
@@ -1785,6 +1936,18 @@ function handleTripToggleClick(trigger) {
 
   expandedTrips.set(tripId, !isTripExpanded(tripId));
   renderTrips();
+}
+
+function handleVideoPreviewClick(trigger) {
+  const tripId = String(trigger.getAttribute("data-trip-id") || "");
+  const folderId = String(trigger.getAttribute("data-folder-id") || "");
+  const itemId = String(trigger.getAttribute("data-item-id") || "");
+
+  if (!tripId || !folderId || !itemId) {
+    return;
+  }
+
+  openVideoPreview(tripId, folderId, itemId);
 }
 
 function handleTripBrowserChange(event) {
@@ -2007,7 +2170,7 @@ async function handleItemDeleteClick(trigger) {
     return;
   }
 
-  const confirmed = window.confirm(`Delete ${item.name || item.title || "this item"}?`);
+  const confirmed = window.confirm(`Delete ${getItemDisplayName(item) || "this item"}?`);
   if (!confirmed) {
     return;
   }
@@ -2051,7 +2214,9 @@ async function handleItemDeleteClick(trigger) {
       )
     );
 
-    authDetail.textContent = STRINGS.items.itemRemoved(item.name || item.title || "ITEM");
+    authDetail.textContent = STRINGS.items.itemRemoved(
+      getItemDisplayName(item) || "ITEM"
+    );
     await loadSelectedFolderItems(tripId);
   } catch (error) {
     authDetail.textContent = getErrorMessage(error, STRINGS.errors.itemDeleteFailed);
@@ -2360,6 +2525,22 @@ function renderTrips() {
     .join("");
 }
 
+function getItemDisplayName(item) {
+  if (item?.kind === "text") {
+    return String(item?.title || item?.name || "UNTITLED");
+  }
+
+  const originalName = String(item?.originalName || "").trim();
+  if (originalName) {
+    return originalName;
+  }
+
+  const storedName = String(item?.name || "").trim();
+  const cleanedName = storedName.replace(/^\d{13,20}-[a-z0-9]{6}-/i, "");
+
+  return cleanedName || storedName || "untitled";
+}
+
 function renderItemRows(items, tripId, folderId) {
   if (items.length === 0) {
     return `
@@ -2375,11 +2556,12 @@ function renderItemRows(items, tripId, folderId) {
 
   return items
     .map((item) => {
+      const displayName = getItemDisplayName(item);
       const typeLabel =
         item.kind === "text"
           ? STRINGS.items.post
           : item.extension || simplifyMimeType(item.mimeType) || "FILE";
-      const preview = renderItemPreview(item);
+      const preview = renderItemPreview(item, tripId, folderId);
       const author = renderItemAuthor(item);
       const meta = renderItemMeta(item, tripId, folderId);
       const nameMarkup =
@@ -2387,12 +2569,12 @@ function renderItemRows(items, tripId, folderId) {
           ? `<div class="text-stone-100">${escapeHtml(item.title || item.name)}</div>`
           : `<a class="text-sky-300 underline-offset-4 hover:underline" href="${escapeHtml(
               item.downloadURL
-            )}" target="_blank" rel="noreferrer">${escapeHtml(item.name)}</a>`;
+            )}" target="_blank" rel="noreferrer">${escapeHtml(displayName)}</a>`;
 
       return `
         <tr class="align-top transition hover:bg-white/[0.03]">
           <td class="min-w-[18rem] border-b border-white/8 px-3 py-4">${preview}</td>
-          <td class="min-w-[10rem] border-b border-white/8 px-3 py-4 uppercase">${nameMarkup}</td>
+          <td class="min-w-[10rem] border-b border-white/8 px-3 py-4">${nameMarkup}</td>
           <td class="w-24 min-w-[5.5rem] border-b border-white/8 px-3 py-4 uppercase text-stone-300/72">${escapeHtml(
             typeLabel
           )}</td>
@@ -2408,7 +2590,7 @@ function renderItemMeta(item, tripId, folderId) {
   const summary =
     item.kind === "text"
       ? STRINGS.items.textPost
-      : `${formatBytes(item.size)} / ${escapeHtml(item.originalName || item.name)}`;
+      : `${formatBytes(item.size)} / ${escapeHtml(getItemDisplayName(item))}`;
   const descriptionMarkup =
     item.kind === "file" && item.description
       ? `<div class="mt-2 normal-case text-[0.64rem] leading-5 tracking-[0.04em] text-stone-300/72">${escapeHtml(
@@ -2447,7 +2629,9 @@ function renderItemMeta(item, tripId, folderId) {
   return `${summary}${descriptionMarkup}${editButton}${deleteButton}`;
 }
 
-function renderItemPreview(item) {
+function renderItemPreview(item, tripId, folderId) {
+  const displayName = getItemDisplayName(item);
+
   if (item.kind === "text") {
     return `<p class="min-w-[18rem] max-w-[30rem] whitespace-pre-wrap break-words text-[0.78rem] leading-6 tracking-[0.04em] text-stone-300/78 sm:min-w-[22rem]">${escapeHtml(
       item.bodyText
@@ -2458,7 +2642,7 @@ function renderItemPreview(item) {
     return `
       <a href="${escapeHtml(item.downloadURL)}" target="_blank" rel="noreferrer">
         <img src="${escapeHtml(item.downloadURL)}" alt="${escapeHtml(
-      item.name
+      displayName
     )}" class="h-20 w-20 object-cover ring-1 ring-white/10">
       </a>
     `;
@@ -2467,18 +2651,34 @@ function renderItemPreview(item) {
   if (item.mimeType.startsWith("video/")) {
     if (item.posterDownloadURL) {
       return `
-        <a href="${escapeHtml(item.downloadURL)}" target="_blank" rel="noreferrer" class="inline-block">
+        <button
+          type="button"
+          data-action="preview-video"
+          data-trip-id="${escapeHtml(tripId)}"
+          data-folder-id="${escapeHtml(folderId)}"
+          data-item-id="${escapeHtml(item.id)}"
+          class="inline-block transition hover:opacity-90"
+          aria-label="Preview ${escapeHtml(displayName)}"
+        >
           <img src="${escapeHtml(item.posterDownloadURL)}" alt="${escapeHtml(
-        item.name
+        displayName
       )}" class="block h-16 w-28 max-h-16 overflow-hidden object-cover ring-1 ring-white/10">
-        </a>
+        </button>
       `;
     }
 
     return `
-      <a class="inline-flex h-16 w-28 max-h-16 items-center justify-center border border-white/10 bg-black/35 text-[0.62rem] uppercase tracking-[0.16em] text-stone-300/72" href="${escapeHtml(
-        item.downloadURL
-      )}" target="_blank" rel="noreferrer">VIDEO</a>
+      <button
+        type="button"
+        data-action="preview-video"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="inline-flex h-16 w-28 max-h-16 items-center justify-center border border-white/10 bg-black/35 text-[0.62rem] uppercase tracking-[0.16em] text-stone-300/72 transition hover:border-white/25 hover:text-stone-100"
+        aria-label="Preview ${escapeHtml(displayName)}"
+      >
+        VIDEO
+      </button>
     `;
   }
 
@@ -2713,7 +2913,7 @@ function getItemsForFolder(tripId, folderId) {
   return itemsByFolder.get(buildFolderCacheKey(tripId, folderId)) || [];
 }
 
-function getSortedItemsForFolder(tripId, folderId, sortMode = ITEM_SORT_MEDIA_DATE_DESC) {
+function getSortedItemsForFolder(tripId, folderId, sortMode = ITEM_SORT_MEDIA_DATE_ASC) {
   const items = getItemsForFolder(tripId, folderId);
   return [...items].sort((left, right) => compareItems(left, right, sortMode));
 }
@@ -2733,7 +2933,7 @@ function renderItemSortOptions(selectedMode) {
 
 function getItemSortMode(tripId, folderId) {
   const cacheKey = buildFolderCacheKey(tripId, folderId);
-  return itemSortPreferences.get(cacheKey) || ITEM_SORT_MEDIA_DATE_DESC;
+  return itemSortPreferences.get(cacheKey) || ITEM_SORT_MEDIA_DATE_ASC;
 }
 
 function normalizeItemSortMode(value) {
@@ -2743,7 +2943,7 @@ function normalizeItemSortMode(value) {
     ITEM_SORT_RECENTLY_ADDED,
   ].includes(value)
     ? value
-    : ITEM_SORT_MEDIA_DATE_DESC;
+    : ITEM_SORT_MEDIA_DATE_ASC;
 }
 
 function compareItems(left, right, sortMode) {
