@@ -327,28 +327,29 @@ async function loadRuntimeConfig() {
   const response = await fetch("/api/config", {
     headers: { Accept: "application/json" },
   });
+  const payload = await readJsonResponse(response);
 
   if (!response.ok) {
     throw new Error("Could not load runtime configuration from /api/config.");
   }
 
-  return response.json();
+  return payload;
 }
 
 async function loadVaultStatus() {
   const response = await fetch("/api/vault/status", {
     headers: { Accept: "application/json" },
   });
+  const payload = await readJsonResponse(response);
 
   if (!response.ok) {
     throw new Error("Could not load vault status.");
   }
 
-  const status = await response.json();
   return {
-    configured: Boolean(status?.configured),
-    unlocked: Boolean(status?.unlocked),
-    videoPath: String(status?.videoPath || "/assets/vault-intro.mp4"),
+    configured: Boolean(payload?.configured),
+    unlocked: Boolean(payload?.unlocked),
+    videoPath: String(payload?.videoPath || "/assets/vault-intro.mp4"),
   };
 }
 
@@ -527,7 +528,7 @@ async function handleVaultSubmit(event) {
       },
       body: JSON.stringify({ password }),
     });
-    const payload = await readJsonSafely(response);
+    const payload = await readJsonResponse(response);
 
     if (!response.ok) {
       setVaultStatusMessage(getFriendlyVaultMessage(payload), true);
@@ -606,11 +607,31 @@ async function playVaultIntro() {
   vaultIntroPlaying = false;
 }
 
-async function readJsonSafely(response) {
-  try {
-    return await response.json();
-  } catch {
+async function readJsonResponse(response) {
+  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+  const rawBody = await response.text();
+  const trimmedBody = rawBody.trim();
+
+  if (!trimmedBody) {
     return {};
+  }
+
+  if (!contentType.includes("application/json")) {
+    if (
+      trimmedBody.startsWith("<!DOCTYPE") ||
+      trimmedBody.startsWith("<html") ||
+      trimmedBody.startsWith("<HTML")
+    ) {
+      throw new Error(STRINGS.errors.apiReturnedHtml);
+    }
+
+    throw new Error(STRINGS.errors.apiReturnedInvalidJson);
+  }
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    throw new Error(STRINGS.errors.apiReturnedInvalidJson);
   }
 }
 

@@ -96,6 +96,9 @@ export const STRINGS = {
   },
   errors: {
     initFailed: "Initialization failed.",
+    apiReturnedHtml:
+      "HOSTED API RETURNED HTML INSTEAD OF JSON. REDEPLOY VERCEL SO /API IS NOT REWRITTEN TO INDEX.HTML.",
+    apiReturnedInvalidJson: "HOSTED API RETURNED INVALID JSON.",
     runtimeConfigMissing:
       "Runtime config is incomplete. Fill in the Firebase values in .env.",
     userSyncFailed: "Could not sync user record.",
