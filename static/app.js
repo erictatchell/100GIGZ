@@ -3210,10 +3210,19 @@ function renderTrips() {
       const tripToggleLabel = expanded
         ? STRINGS.trips.collapseTrip
         : STRINGS.trips.expandTrip;
+      const tripShellClass = expanded
+        ? "border border-white/10  bg-white/[0.02]"
+        : "border border-white/10 bg-white/[0.02]";
+      const tripHeaderClass = expanded
+        ? "flex flex-col gap-3 border-b border-cyan-100/10 bg-[linear-gradient(to_right,rgba(0, 45, 66, 0.04),rgba(255,255,255,0.008)_42%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
+        : "flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5";
+      const tripContentClass = expanded
+        ? "grid gap-5 bg-[linear-gradient(to_bottom,rgba(88, 88, 88, 0.25),rgba(15, 15, 15, 0.01))] p-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-5"
+        : "hidden gap-5 p-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-5";
 
       return `
-        <section class="border border-white/10 bg-white/[0.02]">
-          <div class="flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+        <section class="${tripShellClass}">
+          <div class="${tripHeaderClass}">
             <div class="space-y-2">
               <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/55">${String(
                 getTripSequenceNumber(trip, index)
@@ -3277,7 +3286,7 @@ function renderTrips() {
             </div>
           </div>
 
-          <div class="${expanded ? "grid" : "hidden"} gap-5 p-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-5">
+          <div class="${tripContentClass}">
             <aside class="border border-white/10 bg-black/25 p-4">
               <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.24em] text-stone-300/65">
                 Folders
