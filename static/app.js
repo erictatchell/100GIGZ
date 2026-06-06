@@ -54,6 +54,7 @@ const DEFAULT_TRIPS = [
 
 const siteShell = document.getElementById("site-shell");
 const vaultGate = document.getElementById("vault-gate");
+const appLoadingOverlay = document.getElementById("app-loading-overlay");
 const vaultFrameCanvas = document.getElementById("vault-frame");
 const vaultVideo = document.getElementById("vault-video");
 const vaultForm = document.getElementById("vault-form");
@@ -64,6 +65,7 @@ const loadingText = document.getElementById("loading-text");
 const logo = document.getElementById("logo");
 const tripList = document.getElementById("trip-list");
 const tripCount = document.getElementById("trip-count");
+const footerTickerTrack = document.getElementById("footer-ticker-track");
 const authStatus = document.getElementById("auth-status");
 const authDetail = document.getElementById("auth-detail");
 const authWarning = document.getElementById("auth-warning");
@@ -146,6 +148,8 @@ const uploadFolderSelect = document.getElementById("upload-folder-select");
 const textTripSelect = document.getElementById("text-trip-select");
 const textFolderSelect = document.getElementById("text-folder-select");
 const uploadFilesInput = document.getElementById("upload-files-input");
+const uploadFileNameListShell = document.getElementById("upload-file-name-list-shell");
+const uploadFileNameList = document.getElementById("upload-file-name-list");
 const uploadDescriptionInput = document.getElementById("upload-description-input");
 const uploadDescriptionLabel = document.getElementById("upload-description-label");
 const uploadAuthorModeShell = document.getElementById("upload-author-mode-shell");
@@ -164,6 +168,8 @@ const editPostContext = document.getElementById("edit-post-context");
 const editPostAliasShell = document.getElementById("edit-post-alias-shell");
 const editPostAuthorModeSelect = document.getElementById("edit-post-author-mode-select");
 const editPostFileName = document.getElementById("edit-post-file-name");
+const editPostMediaNameShell = document.getElementById("edit-post-media-name-shell");
+const editPostMediaNameInput = document.getElementById("edit-post-media-name-input");
 const editPostTitleShell = document.getElementById("edit-post-title-shell");
 const editPostTitleInput = document.getElementById("edit-post-title-input");
 const editPostDescriptionShell = document.getElementById("edit-post-description-shell");
@@ -186,7 +192,10 @@ const moveItemSubmitButton = document.getElementById("move-item-submit-button");
 const videoPreviewModal = document.getElementById("video-preview-modal");
 const videoPreviewBackdrop = document.getElementById("video-preview-backdrop");
 const videoPreviewCloseButton = document.getElementById("video-preview-close-button");
+const videoPreviewShell = document.getElementById("video-preview-shell");
 const videoPreviewTitle = document.getElementById("video-preview-title");
+const videoPreviewBadge = document.getElementById("video-preview-badge");
+const videoPreviewFrame = document.getElementById("video-preview-frame");
 const videoPreviewPlayer = document.getElementById("video-preview-player");
 const videoPreviewPrevButton = document.getElementById("video-preview-prev-button");
 const videoPreviewNextButton = document.getElementById("video-preview-next-button");
@@ -216,6 +225,8 @@ const ROUTE_PROFILE_PUBLIC = "profile-public";
 const ROUTE_UNKNOWN = "unknown";
 const AUTHOR_ALIAS_BRAND = "brand";
 const AUTHOR_ALIAS_SELF = "self";
+const HIGHLIGHT_FOLDER_LABEL = String(STRINGS.brand || "100GIGZ").trim() || "100GIGZ";
+const HIGHLIGHT_FOLDER_ID = slugifyFolder(HIGHLIGHT_FOLDER_LABEL);
 const MAX_VIDEO_UPLOADS_PER_DAY = 10;
 const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 const MAX_PROFILE_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -269,6 +280,8 @@ let vaultState = {
   message: "",
 };
 let appInitializationPromise = null;
+let appLoadingOverlayHideTimeout = 0;
+let routeLoadingOverlayActive = false;
 let vaultIntroPlaying = false;
 let tripUnsubscribe = null;
 let usersUnsubscribe = null;
@@ -282,6 +295,7 @@ renderAll();
 setupForms();
 initializeVaultExperience().catch((error) => {
   const message = error instanceof Error ? error.message : STRINGS.errors.initFailed;
+  setAppLoadingOverlayVisible(false);
   showWarning(message);
   setVaultStatusMessage(message.toUpperCase(), true);
 });
@@ -434,6 +448,7 @@ async function initializeVaultExperience() {
   prepareVaultBackdrop();
 
   if (!vaultState.configured) {
+    setAppLoadingOverlayVisible(false);
     lockSiteShell();
     showVaultGate();
     setVaultFormEnabled(false);
@@ -448,18 +463,19 @@ async function initializeVaultExperience() {
   }
 
   if (vaultState.unlocked) {
-    showVaultGate();
-    setVaultFormVisible(false);
-    setVaultStatusMessage("");
+    lockSiteShell();
+    hideVaultGateImmediately();
+    setAppLoadingOverlayVisible(true);
     const [initResult] = await Promise.allSettled([initializeAppOnce()]);
     if (initResult.status === "rejected") {
       showWarning(getErrorMessage(initResult.reason, "Initialization failed."));
     }
     revealSiteShell();
-    hideVaultGate();
+    setAppLoadingOverlayVisible(false);
     return;
   }
 
+  setAppLoadingOverlayVisible(false);
   lockSiteShell();
   showVaultGate();
   setVaultFormEnabled(true);
@@ -652,10 +668,63 @@ function revealSiteShell() {
   document.body.classList.remove("overflow-hidden");
 }
 
+function setAppLoadingOverlayVisible(visible) {
+  if (!appLoadingOverlay) {
+    return;
+  }
+
+  if (appLoadingOverlayHideTimeout) {
+    window.clearTimeout(appLoadingOverlayHideTimeout);
+    appLoadingOverlayHideTimeout = 0;
+  }
+
+  if (visible) {
+    appLoadingOverlay.classList.remove("hidden", "pointer-events-none", "opacity-0");
+    appLoadingOverlay.classList.add("flex", "opacity-100");
+    return;
+  }
+
+  appLoadingOverlay.classList.add("pointer-events-none", "opacity-0");
+  appLoadingOverlay.classList.remove("opacity-100");
+  appLoadingOverlayHideTimeout = window.setTimeout(() => {
+    appLoadingOverlay.classList.add("hidden");
+    appLoadingOverlayHideTimeout = 0;
+  }, 300);
+}
+
+function beginRouteLoadingOverlay() {
+  routeLoadingOverlayActive = true;
+  setAppLoadingOverlayVisible(true);
+}
+
+function finishRouteLoadingOverlayIfReady() {
+  if (!routeLoadingOverlayActive || siteShell?.getAttribute("aria-hidden") === "true") {
+    return;
+  }
+
+  const profileView = getActiveProfileView();
+
+  if (profileView?.state === "loading") {
+    return;
+  }
+
+  routeLoadingOverlayActive = false;
+  setAppLoadingOverlayVisible(false);
+}
+
 function showVaultGate() {
   vaultGate?.classList.remove("hidden", "pointer-events-none", "opacity-0");
   vaultGate?.classList.add("opacity-100");
   document.body.classList.add("overflow-hidden");
+}
+
+function hideVaultGateImmediately() {
+  if (!vaultGate) {
+    return;
+  }
+
+  vaultGate.classList.add("hidden", "pointer-events-none", "opacity-0");
+  vaultGate.classList.remove("opacity-100");
 }
 
 function hideVaultGate() {
@@ -973,6 +1042,7 @@ function setupForms() {
   bannerGoogleButton?.addEventListener("click", handleGoogleSignIn);
   uploadTripSelect?.addEventListener("change", renderAdminSelects);
   textTripSelect?.addEventListener("change", renderAdminSelects);
+  uploadFilesInput?.addEventListener("change", handleUploadFilesSelectionChange);
   profileRouteInput?.addEventListener("input", handleProfileRouteInput);
   profileTripList?.addEventListener("click", handleProfileTripBrowserClick);
   profileTripList?.addEventListener("change", handleProfileTripBrowserChange);
@@ -982,6 +1052,7 @@ function setupForms() {
   friendsDesktopList?.addEventListener("click", handleProfileActionClick);
   friendsMobileList?.addEventListener("click", handleProfileActionClick);
   friendsMobileInlineList?.addEventListener("click", handleProfileActionClick);
+  document.addEventListener("click", handleDocumentRouteLinkClick);
   window.addEventListener("scroll", syncScrollBannerVisibility, { passive: true });
   window.addEventListener("resize", syncResponsivePanels);
   window.addEventListener("keydown", handleWindowKeydown);
@@ -1058,6 +1129,10 @@ function syncResponsivePanels() {
 
   if (!mobileViewport) {
     setMobileMenuOpen(false);
+  }
+
+  if (enforceSingleExpandedTripOnMobile()) {
+    renderTrips();
   }
 
   syncScrollBannerVisibility();
@@ -1203,11 +1278,13 @@ function setMobileMenuOpen(nextOpen) {
 }
 
 function handleWindowPopstate() {
+  beginRouteLoadingOverlay();
   currentRoute = normalizeRoute(window.location.pathname);
   renderAll();
 }
 
 function handleRouteToggleClick() {
+  beginRouteLoadingOverlay();
   navigateToRoute(isProfileRoute() ? ROUTE_ARCHIVE : getOwnProfileRoute());
 }
 
@@ -1386,6 +1463,7 @@ function beginContribution(tripId, folderId) {
 
   uploadForm?.reset();
   textPostForm?.reset();
+  renderUploadFileNameInputs();
   syncAuthorModeField(uploadAuthorModeSelect, uploadAuthorModeShell, AUTHOR_ALIAS_BRAND);
   syncAuthorModeField(textAuthorModeSelect, textAuthorModeShell, AUTHOR_ALIAS_BRAND);
   setContributeMode("");
@@ -1409,8 +1487,46 @@ function resetContributeDialog() {
   currentContributionContext = null;
   uploadForm?.reset();
   textPostForm?.reset();
+  renderUploadFileNameInputs();
   setContributeMode("");
   setContributeModalOpen(false);
+}
+
+function renderUploadFileNameInputs() {
+  if (!uploadFileNameListShell || !uploadFileNameList) {
+    return;
+  }
+
+  const files = Array.from(uploadFilesInput?.files || []);
+
+  uploadFileNameListShell.classList.toggle("hidden", files.length === 0);
+
+  if (files.length === 0) {
+    uploadFileNameList.innerHTML = "";
+    return;
+  }
+
+  uploadFileNameList.innerHTML = files
+    .map((file, index) => `
+      <label class="block">
+        <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.64rem] uppercase tracking-[0.18em] text-stone-400/72">File ${String(index + 1).padStart(2, "0")}</span>
+        <input
+          type="text"
+          data-upload-file-name-index="${index}"
+          maxlength="120"
+          value="${escapeHtml(file.name)}"
+          class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35"
+        >
+      </label>
+    `)
+    .join("");
+}
+
+function getPendingUploadDisplayNames(files) {
+  return files.map((file, index) => {
+    const input = uploadFileNameList?.querySelector(`[data-upload-file-name-index="${index}"]`);
+    return normalizeMediaDisplayName(input?.value, file.name);
+  });
 }
 
 function openTextPreview(tripId, folderId, itemId) {
@@ -1468,6 +1584,59 @@ function handleProfileRouteInput(event) {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, 3);
+}
+
+function handleUploadFilesSelectionChange() {
+  renderUploadFileNameInputs();
+}
+
+function handleDocumentRouteLinkClick(event) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+
+  const anchor = event.target.closest("a[href]");
+
+  if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) {
+    return;
+  }
+
+  const href = String(anchor.getAttribute("href") || "").trim();
+
+  if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+    return;
+  }
+
+  let targetUrl = null;
+
+  try {
+    targetUrl = new URL(href, window.location.origin);
+  } catch {
+    return;
+  }
+
+  if (targetUrl.origin !== window.location.origin) {
+    return;
+  }
+
+  const nextRoute = normalizeRoute(targetUrl.pathname);
+
+  if (nextRoute.kind === ROUTE_UNKNOWN) {
+    return;
+  }
+
+  event.preventDefault();
+  beginRouteLoadingOverlay();
+  window.requestAnimationFrame(() => {
+    navigateToRoute(nextRoute);
+  });
 }
 
 function handleProfileTripBrowserClick(event) {
@@ -2023,6 +2192,7 @@ async function handleProfileDetailsSubmit(event) {
 
     window.setTimeout(() => {
       const targetPath = buildProfilePath(routeId);
+      setAppLoadingOverlayVisible(true);
 
       if (window.location.pathname === targetPath) {
         window.location.reload();
@@ -2297,6 +2467,7 @@ async function handleUploadSubmit(event) {
   const trip = trips.find((item) => item.id === tripId);
   const folder = getFoldersForTrip(tripId).find((item) => item.id === folderId);
   const authorMode = getSelectedAuthorMode(uploadAuthorModeSelect);
+  const displayNames = getPendingUploadDisplayNames(files);
 
   if (!trip || !folder || files.length === 0) {
     return;
@@ -2327,7 +2498,7 @@ async function handleUploadSubmit(event) {
   }
 
   const uploadPromises = files.map((file, index) =>
-    uploadMediaFile(trip, folder, file, index, description, authorMode)
+    uploadMediaFile(trip, folder, file, index, description, authorMode, displayNames[index])
   );
 
   const results = await Promise.allSettled(uploadPromises);
@@ -2341,8 +2512,9 @@ async function handleUploadSubmit(event) {
   await loadSelectedFolderItems(tripId);
 }
 
-async function uploadMediaFile(trip, folder, file, index, description = "", authorMode) {
-  const generatedName = buildStorageFileName(file, index);
+async function uploadMediaFile(trip, folder, file, index, description = "", authorMode, displayName = "") {
+  const resolvedDisplayName = normalizeMediaDisplayName(displayName, file.name);
+  const generatedName = buildStorageFileName(file, index, resolvedDisplayName);
   const ownerUid = String(currentUser?.uid || "member");
   const storagePath = `trips/${trip.slug}/${folder.slug}/${ownerUid}/${generatedName}`;
   const ref = storageRef(storage, storagePath);
@@ -2351,7 +2523,7 @@ async function uploadMediaFile(trip, folder, file, index, description = "", auth
 
   pushUploadJob({
     id: jobId,
-    name: generatedName,
+    name: resolvedDisplayName || generatedName,
     status: "uploading",
     progress: 0,
   });
@@ -2431,8 +2603,9 @@ async function uploadMediaFile(trip, folder, file, index, description = "", auth
     kind: "file",
     mediaCategory,
     name: generatedName,
-    originalName: file.name,
+    originalName: resolvedDisplayName || file.name,
     description,
+    certified: false,
     mediaDateMs: Number(file.lastModified || 0),
     mimeType: file.type || "application/octet-stream",
     extension: getFileExtension(generatedName),
@@ -2804,6 +2977,7 @@ async function handleTextPostSubmit(event) {
       body,
       name: `${slugifyFolder(title)}.txt`,
       mimeType: "text/plain",
+      certified: false,
       authorLabel: authorship.authorLabel,
       authorUid: authorship.authorUid,
       authorRouteId: authorship.authorRouteId,
@@ -2838,6 +3012,10 @@ async function handleEditTextPostSubmit(event) {
   const title = sanitizeUpper(formData.get("title"));
   const body = String(formData.get("body") || "").trim();
   const description = String(formData.get("description") || "").trim();
+  const mediaName = normalizeMediaDisplayName(
+    formData.get("mediaName"),
+    currentItemEdit.item?.originalName || getItemDisplayName(currentItemEdit.item)
+  );
   const updates = {
     updatedAt: serverTimestamp(),
     updatedByUid: currentUser?.uid || "",
@@ -2860,6 +3038,7 @@ async function handleEditTextPostSubmit(event) {
     Object.assign(updates, {
       kind: "file",
       description,
+      originalName: mediaName,
     });
   }
 
@@ -2919,6 +3098,10 @@ function beginItemEdit(tripId, folderId, item) {
     editPostDescriptionInput.value = item.description || "";
   }
 
+  if (editPostMediaNameInput) {
+    editPostMediaNameInput.value = item.originalName || getItemDisplayName(item);
+  }
+
   if (editPostBodyInput) {
     editPostBodyInput.value = item.bodyText || "";
   }
@@ -2941,6 +3124,7 @@ function beginItemEdit(tripId, folderId, item) {
   editPostTitleShell?.classList.toggle("hidden", !isTextItem);
   editPostBodyShell?.classList.toggle("hidden", !isTextItem);
   editPostDescriptionShell?.classList.toggle("hidden", isTextItem);
+  editPostMediaNameShell?.classList.toggle("hidden", isTextItem);
 
   if (editPostTitleInput) {
     editPostTitleInput.required = isTextItem;
@@ -2948,6 +3132,10 @@ function beginItemEdit(tripId, folderId, item) {
 
   if (editPostBodyInput) {
     editPostBodyInput.required = isTextItem;
+  }
+
+  if (editPostMediaNameInput) {
+    editPostMediaNameInput.required = !isTextItem;
   }
 
   if (editPostAliasShell) {
@@ -2967,8 +3155,8 @@ function beginItemEdit(tripId, folderId, item) {
       return;
     }
 
-    editPostDescriptionInput?.focus();
-    editPostDescriptionInput?.select();
+    editPostMediaNameInput?.focus();
+    editPostMediaNameInput?.select();
   });
 }
 
@@ -2986,9 +3174,14 @@ function resetTextPostEditor() {
     editPostFileName.classList.add("hidden");
   }
 
+  if (editPostMediaNameInput) {
+    editPostMediaNameInput.value = "";
+  }
+
   editPostTitleShell?.classList.remove("hidden");
   editPostBodyShell?.classList.remove("hidden");
   editPostDescriptionShell?.classList.add("hidden");
+  editPostMediaNameShell?.classList.add("hidden");
   editPostAliasShell?.classList.add("hidden");
 
   setEditPostModalOpen(false);
@@ -3001,7 +3194,9 @@ function beginItemMove(tripId, folderId, item) {
 
   const trip = trips.find((entry) => entry.id === tripId);
   const currentFolder = getFoldersForTrip(tripId).find((entry) => entry.id === folderId);
-  const destinationFolders = getFoldersForTrip(tripId).filter((entry) => entry.id !== folderId);
+  const destinationFolders = getFoldersForTrip(tripId).filter(
+    (entry) => entry.id !== folderId && !isHighlightFolder(entry)
+  );
 
   if (!trip || !currentFolder || destinationFolders.length === 0) {
     return;
@@ -3117,6 +3312,7 @@ async function handleMoveItemSubmit(event) {
     const batch = writeBatch(db);
     batch.set(destinationRef, {
       ...sourceSnapshot.data(),
+      folderId: destinationFolderId,
       updatedAt: serverTimestamp(),
       updatedByUid: currentUser?.uid || "",
       updatedByEmail: currentUser?.email || "",
@@ -3259,6 +3455,8 @@ function syncVideoPreviewNavigation(previewState = getCurrentVideoPreviewState()
       : "";
   }
 
+  syncVideoPreviewCertification(previewState);
+
   if (videoPreviewPrevButton) {
     videoPreviewPrevButton.disabled = !previewState || previewState.currentIndex === 0;
   }
@@ -3266,6 +3464,44 @@ function syncVideoPreviewNavigation(previewState = getCurrentVideoPreviewState()
   if (videoPreviewNextButton) {
     videoPreviewNextButton.disabled =
       !previewState || previewState.currentIndex >= previewState.items.length - 1;
+  }
+}
+
+function syncVideoPreviewCertification(previewState = getCurrentVideoPreviewState()) {
+  const certified = Boolean(previewState?.currentItem && isItemCertified(previewState.currentItem));
+
+  if (videoPreviewBadge) {
+    videoPreviewBadge.textContent = certified ? HIGHLIGHT_FOLDER_LABEL : "";
+    videoPreviewBadge.classList.toggle("hidden", !certified);
+
+    if (certified) {
+      videoPreviewBadge.setAttribute("style", getHighlightTextStyle());
+    } else {
+      videoPreviewBadge.removeAttribute("style");
+    }
+  }
+
+  if (videoPreviewShell) {
+    if (certified) {
+      videoPreviewShell.classList.remove("border-white/12");
+      videoPreviewShell.classList.add("border-amber-300/28");
+      videoPreviewShell.style.boxShadow =
+        "0 24px 96px rgba(0,0,0,0.62),0 0 28px rgba(255,191,31,0.06)";
+    } else {
+      videoPreviewShell.classList.remove("border-amber-300/28");
+      videoPreviewShell.classList.add("border-white/12");
+      videoPreviewShell.style.boxShadow = "";
+    }
+  }
+
+  if (videoPreviewFrame) {
+    if (certified) {
+      videoPreviewFrame.classList.remove("border-white/12", "bg-black/70");
+      videoPreviewFrame.classList.add("border-amber-300/32", "bg-[rgba(32,22,6,0.62)]");
+    } else {
+      videoPreviewFrame.classList.remove("border-amber-300/32", "bg-[rgba(32,22,6,0.62)]");
+      videoPreviewFrame.classList.add("border-white/12", "bg-black/70");
+    }
   }
 }
 
@@ -3319,7 +3555,9 @@ function hasAlternativeFolderForItemMove(tripId, folderId) {
     return false;
   }
 
-  return getFoldersForTrip(tripId).some((folder) => folder.id !== folderId);
+  return getFoldersForTrip(tripId).some(
+    (folder) => folder.id !== folderId && !isHighlightFolder(folder)
+  );
 }
 
 function canMoveItem(item, tripId, folderId) {
@@ -3446,10 +3684,24 @@ function handleTripBrowserClick(event) {
     return;
   }
 
+  const certifiedTrigger = event.target.closest("[data-action='toggle-certified']");
+
+  if (certifiedTrigger) {
+    handleItemCertifiedToggleClick(certifiedTrigger);
+    return;
+  }
+
   const editTrigger = event.target.closest("[data-action='edit-item']");
 
   if (editTrigger) {
     handleItemEditClick(editTrigger);
+    return;
+  }
+
+  const tripToggleSurfaceTrigger = event.target.closest("[data-trip-toggle-surface='true']");
+
+  if (tripToggleSurfaceTrigger) {
+    handleTripToggleClick(tripToggleSurfaceTrigger);
     return;
   }
 
@@ -3479,7 +3731,10 @@ function handleTripBrowserClick(event) {
     return;
   }
 
-  setSelectedFolderId(tripId, folderId, view);
+  const currentFolderId = getSelectedFolderId(tripId, view);
+  const nextFolderId = currentFolderId === folderId ? "" : folderId;
+
+  setSelectedFolderId(tripId, nextFolderId, view);
   renderAll();
 }
 
@@ -3490,7 +3745,17 @@ function handleTripToggleClick(trigger) {
     return;
   }
 
-  expandedTrips.set(tripId, !isTripExpanded(tripId));
+  const nextExpanded = !isTripExpanded(tripId);
+
+  if (isMobileTripLayout()) {
+    trips.forEach((trip) => {
+      expandedTrips.set(trip.id, false);
+    });
+    expandedTrips.set(tripId, nextExpanded);
+  } else {
+    expandedTrips.set(tripId, nextExpanded);
+  }
+
   renderTrips();
 }
 
@@ -3551,6 +3816,77 @@ function handleItemMoveClick(trigger) {
   }
 
   beginItemMove(tripId, folderId, item);
+}
+
+async function handleItemCertifiedToggleClick(trigger) {
+  if (!db || !isAdminViewEnabled()) {
+    return;
+  }
+
+  const tripId = String(trigger.getAttribute("data-trip-id") || "");
+  const folderId = String(trigger.getAttribute("data-folder-id") || "");
+  const itemId = String(trigger.getAttribute("data-item-id") || "");
+  const item = getItemsForFolder(tripId, folderId).find((entry) => entry.id === itemId);
+
+  if (!tripId || !folderId || !itemId || !item || item.kind !== "file") {
+    return;
+  }
+
+  const nextCertified = !isItemCertified(item);
+  const itemRef = doc(
+    db,
+    runtimeConfig.collections.trips,
+    tripId,
+    "folders",
+    folderId,
+    "items",
+    itemId
+  );
+
+  trigger.disabled = true;
+
+  try {
+    const batch = writeBatch(db);
+    batch.set(itemRef, {
+      certified: nextCertified,
+      updatedAt: serverTimestamp(),
+      updatedByUid: currentUser?.uid || "",
+      updatedByEmail: currentUser?.email || "",
+    }, { merge: true });
+
+    if (nextCertified && !getFoldersForTrip(tripId).some((folder) => isHighlightFolder(folder))) {
+      batch.set(
+        doc(db, runtimeConfig.collections.trips, tripId, "folders", HIGHLIGHT_FOLDER_ID),
+        {
+          label: HIGHLIGHT_FOLDER_LABEL,
+          slug: HIGHLIGHT_FOLDER_ID,
+          kind: "highlight",
+          sortOrder: getHighlightFolderSortOrder(tripId),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdByUid: currentUser?.uid || "",
+          updatedByUid: currentUser?.uid || "",
+          updatedByEmail: currentUser?.email || "",
+        },
+        { merge: true }
+      );
+    }
+
+    await batch.commit();
+
+    if (nextCertified) {
+      upsertHighlightFolderInState(tripId);
+    }
+
+    await loadFolderItems(tripId, folderId);
+    renderAll();
+    authDetail.textContent = nextCertified
+      ? `${getItemDisplayName(item).toUpperCase()} CERTIFIED / ADDED TO ${HIGHLIGHT_FOLDER_LABEL}`
+      : `${getItemDisplayName(item).toUpperCase()} REMOVED FROM ${HIGHLIGHT_FOLDER_LABEL}`;
+  } catch (error) {
+    authDetail.textContent = getErrorMessage(error, STRINGS.errors.itemCertificationFailed);
+    trigger.disabled = false;
+  }
 }
 
 async function handleTripMoveClick(trigger) {
@@ -3895,10 +4231,16 @@ async function handleItemDeleteClick(trigger) {
 
     if (
       currentTextPreviewContext?.tripId === tripId &&
-      currentTextPreviewContext.folderId === folderId &&
       currentTextPreviewContext.itemId === itemId
     ) {
       resetTextPreview();
+    }
+
+    if (
+      currentVideoPreviewContext?.tripId === tripId &&
+      currentVideoPreviewContext.itemId === itemId
+    ) {
+      resetVideoPreview();
     }
 
     await loadFolderItems(tripId, folderId);
@@ -3956,6 +4298,7 @@ function renderAll() {
   renderRouteChrome();
   renderCurrentPage();
   renderTripCount();
+  renderFooterTicker();
   renderTrips();
   renderProfilePage();
   renderAdminSelects();
@@ -3963,6 +4306,7 @@ function renderAll() {
   renderUploadQueue();
   renderFriendsPanel();
   syncScrollBannerVisibility();
+  finishRouteLoadingOverlayIfReady();
 }
 
 function renderAuth() {
@@ -4044,6 +4388,29 @@ function renderTripCount() {
   tripCount.textContent = padCount(trips.length, STRINGS.trips.countLabel);
 }
 
+function renderFooterTicker() {
+  if (!footerTickerTrack) {
+    return;
+  }
+
+  const tickerText = buildFooterTickerText();
+  const repeatCount = 6;
+  footerTickerTrack.style.setProperty("--ticker-shift", `${100 / repeatCount}%`);
+  footerTickerTrack.innerHTML = Array.from({ length: repeatCount }, (_, index) => `
+    <span class="site-footer-ticker-segment"${index === 0 ? "" : ' aria-hidden="true"'}>${escapeHtml(tickerText)}</span>
+  `).join("");
+}
+
+function buildFooterTickerText() {
+  if (trips.length === 0) {
+    return "100GIGZ - ARCHIVE - LOADING";
+  }
+
+  return trips
+    .map((trip) => String(trip.label || trip.slug || "TRIP").toUpperCase())
+    .join(" - ");
+}
+
 function syncControlPanelVisibility() {
   const signedIn = canUploadMedia();
   const adminMode = signedIn && isAdminViewEnabled();
@@ -4112,7 +4479,7 @@ function renderTrips() {
               <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/55">${String(
                 getTripSequenceNumber(trip, index)
               ).padStart(4, "0")}</p>
-              <h2 class="text-2xl uppercase tracking-[0.18em] text-stone-100 sm:text-3xl">${escapeHtml(
+              <h2 class="whitespace-nowrap text-2xl uppercase tracking-[0.18em] text-stone-100 sm:text-3xl">${escapeHtml(
                 `${trip.slug}/`
               )}</h2>
               <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs uppercase tracking-[0.18em] text-stone-300/60">${escapeHtml(
@@ -4469,6 +4836,99 @@ function renderResolvedProfilePage(profileView) {
   }
 }
 
+function renderActiveFolderPanel({
+  trip,
+  selectedFolder,
+  items,
+  sortMode,
+  view = "archive",
+  isProfileView = false,
+  adminMode = false,
+  highlightFolderSelected = false,
+  pathLabel = "",
+  contributeMarkup = "",
+  responsiveClass = "",
+} = {}) {
+  if (!trip || !selectedFolder) {
+    return "";
+  }
+
+  const panelShellClass = highlightFolderSelected
+    ? "min-w-0 border border-transparent bg-black/20 p-3 sm:p-4 lg:p-5"
+    : `min-w-0 border ${isProfileView ? "border-white/10 bg-black/28" : "border-white/10 bg-black/20"} p-3 sm:p-4 lg:p-5`;
+  const panelStyle = highlightFolderSelected ? getHighlightPanelStyle() : "";
+  const pathMarkup = highlightFolderSelected
+    ? `<span style="${getHighlightPanelTextStyle()}">${escapeHtml(pathLabel)}</span>`
+    : escapeHtml(pathLabel);
+
+  return `
+    <div class="${responsiveClass} ${panelShellClass}"${panelStyle ? ` style="${panelStyle}"` : ""}>
+      <div class="flex flex-col gap-3 border-b border-white/10 pb-4">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div class="min-w-0">
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.24em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"}">Active Folder</p>
+            <p class="mt-2 break-words text-sm uppercase tracking-[0.14em] text-stone-100 sm:text-base sm:tracking-[0.16em] lg:text-lg">${pathMarkup}</p>
+          </div>
+          <div class="flex min-w-0 flex-col gap-3 lg:items-end">
+            <div class="flex w-full flex-wrap items-center justify-start gap-2 lg:w-auto lg:justify-end lg:gap-3">
+              <label class="flex w-full min-w-0 flex-col items-start gap-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/62"} sm:w-auto sm:flex-row sm:items-center sm:gap-3 sm:text-[0.62rem] sm:tracking-[0.18em]">
+                <span>${STRINGS.items.sortLabel}</span>
+                <select
+                  data-action="sort-items"
+                  data-view="${escapeHtml(view)}"
+                  data-trip-id="${escapeHtml(trip.id)}"
+                  class="w-full border ${isProfileView ? "border-white/12 bg-white/[0.03]" : "border-white/10 bg-black/45"} px-2 py-2 text-[0.56rem] uppercase tracking-[0.12em] text-stone-200 outline-none transition focus:border-white/30 sm:w-auto sm:text-[0.6rem] sm:tracking-[0.16em]"
+                >
+                  ${renderItemSortOptions(sortMode)}
+                </select>
+              </label>
+              ${
+                adminMode && !highlightFolderSelected
+                  ? `
+                    <button
+                      type="button"
+                      data-action="delete-folder"
+                      data-trip-id="${escapeHtml(trip.id)}"
+                      data-folder-id="${escapeHtml(selectedFolder.id)}"
+                      class="border border-amber-300/32 bg-amber-100/[0.03] px-2.5 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.14em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08] sm:px-3 sm:text-[0.62rem] sm:tracking-[0.18em]"
+                    >
+                      Delete Folder
+                    </button>
+                  `
+                  : ""
+              }
+              ${contributeMarkup}
+            </div>
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.14em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"} sm:text-[0.68rem] sm:tracking-[0.18em]">
+              ${isProfileView ? buildMemberPostCountLabel(items.length) : padCount(items.length, STRINGS.trips.objectsLabel)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 max-w-full overflow-hidden rounded-sm border ${highlightFolderSelected ? "border-amber-300/28" : isProfileView ? "border-white/10" : "border-white/8"} bg-black/18">
+        <div class="relative max-h-[46vh] max-w-full overflow-x-auto overflow-y-auto overscroll-x-contain lg:max-h-[68vh] xl:max-h-[75vh]">
+          <table class="w-max min-w-[26rem] border-collapse font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] tracking-[0.04em] text-stone-200/85 sm:min-w-[31rem] sm:text-[0.62rem] sm:tracking-[0.06em] lg:min-w-[37rem] lg:text-[0.68rem] lg:tracking-[0.08em] xl:min-w-full">
+            <thead class="bg-white/[0.02] text-stone-300/55 uppercase">
+              <tr>
+                <th class="sticky top-0 z-10 min-w-[2.65rem] break-all border-b border-white/10 bg-neutral-950 px-1 py-2 text-left text-[0.48rem] font-normal leading-tight shadow-[0_1px_0_rgba(255,255,255,0.05)] sm:min-w-[3rem] sm:px-1.5 sm:py-2.5 sm:text-[0.56rem] lg:min-w-[3.4rem] lg:text-[0.68rem]">${STRINGS.items.previewColumn}</th>
+                <th class="sticky top-0 z-10 min-w-[5.5rem] border-b border-white/10 bg-neutral-950 px-1.5 py-2 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)] sm:min-w-[7rem] sm:px-2 sm:py-2.5 lg:min-w-[9rem]">${STRINGS.items.nameColumn}</th>
+                <th class="sticky top-0 z-10 min-w-[3.25rem] border-b border-white/10 bg-neutral-950 px-1.5 py-2 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)] sm:min-w-[4rem] sm:px-2 sm:py-2.5 lg:min-w-[4.75rem]">${STRINGS.items.typeColumn}</th>
+                <th class="sticky top-0 z-10 min-w-[4.1rem] border-b border-white/10 bg-neutral-950 px-1.5 py-2 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)] sm:min-w-[5.25rem] sm:px-2 sm:py-2.5 lg:min-w-[6.5rem]">${STRINGS.items.authorColumn}</th>
+                <th class="sticky top-0 z-10 min-w-[4.8rem] border-b border-white/10 bg-neutral-950 px-1.5 py-2 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)] sm:min-w-[6rem] sm:px-2 sm:py-2.5 lg:min-w-[7.5rem]">${STRINGS.items.certifiedColumn}</th>
+                <th class="sticky top-0 z-10 min-w-[6.5rem] border-b border-white/10 bg-neutral-950 px-1.5 py-2 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)] sm:min-w-[8rem] sm:px-2 sm:py-2.5 lg:min-w-[10rem]">${STRINGS.items.metaColumn}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderItemRows(items, trip.id, selectedFolder.id, view)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderTripSections({ view = "archive", profileFriend = null } = {}) {
   if (trips.length === 0) {
     return `
@@ -4491,8 +4951,7 @@ function renderTripSections({ view = "archive", profileFriend = null } = {}) {
 function renderTripSection(trip, index, { view = "archive", profileFriend = null } = {}) {
   const isProfileView = view === "profile";
   const adminMode = !isProfileView && isAdminViewEnabled();
-  const adminContextButtonClass = "shrink-0 border border-amber-300/32 bg-amber-100/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08] disabled:cursor-not-allowed disabled:opacity-40";
-  const adminFolderButtonClass = "border border-amber-300/32 bg-amber-100/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]";
+  const adminContextButtonClass = "shrink-0 border border-amber-300/32 bg-amber-100/[0.03] px-2.5 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.14em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 sm:text-[0.62rem] sm:tracking-[0.18em]";
   const folders = isProfileView
     ? getProfileFoldersForTrip(profileFriend, trip.id)
     : getFoldersForTrip(trip.id);
@@ -4502,14 +4961,17 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
   }
 
   const selectedFolderId = getSelectedFolderId(trip.id, view, folders);
-  const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) || folders[0];
+  const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) || null;
   const activeFolderId = selectedFolder?.id || "";
   const sortMode = getItemSortMode(trip.id, activeFolderId, view);
-  const items = isProfileView
-    ? getProfileItemsForFolder(profileFriend, trip.id, activeFolderId, sortMode)
-    : getSortedItemsForFolder(trip.id, activeFolderId, sortMode);
+  const items = !selectedFolder
+    ? []
+    : isProfileView
+      ? getProfileItemsForFolder(profileFriend, trip.id, activeFolderId, sortMode)
+      : getSortedItemsForFolder(trip.id, activeFolderId, sortMode);
   const expanded = isProfileView ? true : isTripExpanded(trip.id);
-  const pathLabel = buildFolderPathLabel(trip, selectedFolder);
+  const pathLabel = selectedFolder ? buildFolderPathLabel(trip, selectedFolder) : `${trip.slug}/`;
+  const highlightFolderSelected = isHighlightFolder(selectedFolder);
   const tripToggleLabel = expanded ? STRINGS.trips.collapseTrip : STRINGS.trips.expandTrip;
   const shellClass = isProfileView
     ? "border border-white/12 bg-[linear-gradient(to_bottom,rgba(38,38,38,0.18),rgba(255,255,255,0.02)_40%,rgba(0,0,0,0.1))]"
@@ -4517,55 +4979,92 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
   const headerClass = isProfileView
     ? "flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.18),rgba(255,255,255,0.01)_46%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
     : expanded
-      ? "flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.08),rgba(255,255,255,0.008)_42%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
-      : "flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5";
+      ? "flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.08),rgba(255,255,255,0.008)_42%,transparent)] px-4 py-4 transition hover:bg-[linear-gradient(to_right,rgba(52,52,52,0.11),rgba(255,255,255,0.014)_42%,transparent)] sm:flex-row sm:items-end sm:justify-between sm:px-5"
+      : "flex flex-col gap-3 border-b border-white/10 px-4 py-4 transition hover:bg-[linear-gradient(to_right,rgba(40,40,40,0.08),rgba(255,255,255,0.012)_42%,transparent)] sm:flex-row sm:items-end sm:justify-between sm:px-5";
   const contentClass = expanded
     ? "grid gap-5 p-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-5"
     : "hidden gap-5 p-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-5";
+  const folderRailClass = selectedFolder
+    ? "min-w-0 border"
+    : "min-w-0 border lg:col-span-2";
   const contributeMarkup =
-    !isProfileView && canUploadMedia() && selectedFolder
+    !isProfileView && canUploadMedia() && selectedFolder && !highlightFolderSelected
       ? `
         <button
           type="button"
           data-action="open-contribute"
           data-trip-id="${escapeHtml(trip.id)}"
           data-folder-id="${escapeHtml(selectedFolder.id)}"
-          class="inline-flex items-center justify-center whitespace-nowrap border border-white/10 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08]"
+          class="inline-flex items-center justify-center whitespace-nowrap border border-white/10 px-2.5 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.14em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08] sm:px-3 sm:text-[0.62rem] sm:tracking-[0.18em]"
           aria-label="Add to ${escapeHtml(pathLabel)}"
         >
           + ADD
         </button>
       `
       : "";
+  const headerToggleAttributes = isProfileView
+    ? ""
+    : ` data-trip-toggle-surface="true" data-trip-id="${escapeHtml(trip.id)}"`;
+  const headerInteractiveClass = isProfileView ? "" : " cursor-pointer select-none";
+  const mobileActiveFolderPanelMarkup = selectedFolder
+    ? renderActiveFolderPanel({
+        trip,
+        selectedFolder,
+        items,
+        sortMode,
+        view,
+        isProfileView,
+        adminMode,
+        highlightFolderSelected,
+        pathLabel,
+        contributeMarkup,
+        responsiveClass: "mt-4 lg:hidden",
+      })
+    : "";
+  const desktopActiveFolderPanelMarkup = selectedFolder
+    ? renderActiveFolderPanel({
+        trip,
+        selectedFolder,
+        items,
+        sortMode,
+        view,
+        isProfileView,
+        adminMode,
+        highlightFolderSelected,
+        pathLabel,
+        contributeMarkup,
+        responsiveClass: "hidden lg:block",
+      })
+    : "";
 
   return `
     <section class="${shellClass}">
-      <div class="${headerClass}">
+      <div class="${headerClass}${headerInteractiveClass}"${headerToggleAttributes}>
         <div class="space-y-2">
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] ${isProfileView ? "text-stone-200/72" : "text-stone-300/55"}">${String(
             getTripSequenceNumber(trip, index)
           ).padStart(4, "0")}</p>
-          <h2 class="text-2xl uppercase tracking-[0.18em] text-stone-100 sm:text-3xl">${escapeHtml(`${trip.slug}/`)}</h2>
+          <h2 class="whitespace-nowrap text-2xl uppercase tracking-[0.18em] text-stone-100 sm:text-3xl">${escapeHtml(`${trip.slug}/`)}</h2>
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs uppercase tracking-[0.18em] ${isProfileView ? "text-stone-300/60" : "text-stone-300/60"}">${escapeHtml(trip.label)}</p>
         </div>
-        <div class="max-w-full overflow-x-auto">
-          <div class="flex w-max items-center gap-3 pr-1">
+        <div class="min-w-0 w-full">
+          <div class="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end sm:gap-3 sm:pr-1">
             ${
               isProfileView
-                ? `<div class="shrink-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-300/68">AUTHORED TRIP</div>`
+                ? `<div class="shrink-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em] text-stone-300/68 sm:text-[0.68rem] sm:tracking-[0.2em]">AUTHORED TRIP</div>`
                 : `
                   <button
                     type="button"
                     data-action="toggle-trip"
                     data-trip-id="${escapeHtml(trip.id)}"
                     aria-expanded="${expanded ? "true" : "false"}"
-                    class="border border-white/10 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]"
+                    class="border border-white/10 px-2.5 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.14em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] sm:px-3 sm:text-[0.62rem] sm:tracking-[0.18em]"
                   >
                     ${tripToggleLabel}
                   </button>
                 `
             }
-            <div class="shrink-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.2em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"}">
+            <div class="shrink-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"} sm:text-[0.72rem] sm:tracking-[0.2em]">
               ${padCount(folders.length, STRINGS.trips.foldersLabel)}
             </div>
             ${
@@ -4607,90 +5106,35 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
       </div>
 
       <div class="${contentClass}">
-        <aside class="border ${isProfileView ? "border-white/10 bg-black/30" : "border-white/10 bg-black/25"} p-4">
+        <aside class="${folderRailClass} ${isProfileView ? "border-white/10 bg-black/30" : "border-white/10 bg-black/25"} p-4">
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.24em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/65"}">
             Folders
           </p>
-          <div class="mt-4 flex flex-col gap-2">
-            ${renderTripFolderButtons(trip, folders, selectedFolderId, view, profileFriend)}
+          <div class="mt-4 flex min-w-0 flex-col gap-2">
+            ${renderTripFolderButtons(trip, folders, selectedFolderId, view, profileFriend, mobileActiveFolderPanelMarkup)}
           </div>
         </aside>
-
-        <div class="min-w-0 border ${isProfileView ? "border-white/10 bg-black/28" : "border-white/10 bg-black/20"} p-4 lg:p-5">
-          <div class="flex flex-col gap-3 border-b ${isProfileView ? "border-white/10" : "border-white/10"} pb-4">
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"}">Active Folder</p>
-                <p class="mt-2 text-lg uppercase tracking-[0.16em] text-stone-100 sm:text-xl">${escapeHtml(pathLabel)}</p>
-              </div>
-              <div class="flex flex-col gap-3 lg:items-end">
-                <div class="flex flex-wrap items-center justify-end gap-3">
-                  <label class="flex items-center gap-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/62"}">
-                    <span>${STRINGS.items.sortLabel}</span>
-                    <select
-                      data-action="sort-items"
-                      data-view="${escapeHtml(view)}"
-                      data-trip-id="${escapeHtml(trip.id)}"
-                      class="border ${isProfileView ? "border-white/12 bg-white/[0.03]" : "border-white/10 bg-black/45"} px-2 py-2 text-[0.62rem] uppercase tracking-[0.16em] text-stone-200 outline-none transition focus:border-white/30"
-                    >
-                      ${renderItemSortOptions(sortMode)}
-                    </select>
-                  </label>
-                  ${
-                    adminMode && selectedFolder
-                      ? `
-                        <button
-                          type="button"
-                          data-action="delete-folder"
-                          data-trip-id="${escapeHtml(trip.id)}"
-                          data-folder-id="${escapeHtml(selectedFolder.id)}"
-                          class="${adminFolderButtonClass}"
-                        >
-                          Delete Folder
-                        </button>
-                      `
-                      : ""
-                  }
-                  ${contributeMarkup}
-                </div>
-                <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.2em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"}">
-                  ${isProfileView ? buildMemberPostCountLabel(items.length) : padCount(items.length, STRINGS.trips.objectsLabel)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-4 max-w-full overflow-hidden rounded-sm border ${isProfileView ? "border-white/10" : "border-white/8"} bg-black/18">
-            <div class="relative max-h-[68vh] max-w-full overflow-x-auto overflow-y-auto overscroll-x-contain xl:max-h-[75vh]">
-              <table class="w-max min-w-[42rem] border-collapse font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs tracking-[0.1em] text-stone-200/85 xl:min-w-full">
-                <thead class="bg-white/[0.02] text-stone-300/55 uppercase">
-                  <tr>
-                    <th class="sticky top-0 z-10 min-w-[8.5rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.previewColumn}</th>
-                    <th class="sticky top-0 z-10 min-w-[10rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.nameColumn}</th>
-                    <th class="sticky top-0 z-10 w-24 min-w-[5.5rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.typeColumn}</th>
-                    <th class="sticky top-0 z-10 min-w-[8rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.authorColumn}</th>
-                    <th class="sticky top-0 z-10 min-w-[12rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.metaColumn}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${renderItemRows(items, trip.id, activeFolderId, view)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        ${desktopActiveFolderPanelMarkup}
       </div>
     </section>
   `;
 }
 
-function renderTripFolderButtons(trip, folders, selectedFolderId, view = "archive", profileFriend = null) {
+function renderTripFolderButtons(trip, folders, selectedFolderId, view = "archive", profileFriend = null, mobileActiveFolderPanelMarkup = "") {
   return folders
     .map((folder) => {
       const isSelected = folder.id === selectedFolderId;
+      const highlightFolder = isHighlightFolder(folder);
       const folderItems = view === "profile"
         ? getProfileItemsForFolder(profileFriend, trip.id, folder.id)
         : getItemsForFolder(trip.id, folder.id);
+      const buttonStyle = highlightFolder ? getHighlightButtonStyle(isSelected) : "";
+      const labelMarkup = highlightFolder
+        ? `<span style="${getHighlightTextStyle()}">${escapeHtml(buildFolderButtonLabel(trip, folder))}</span>`
+        : escapeHtml(buildFolderButtonLabel(trip, folder));
+      const countMarkup = highlightFolder
+        ? `<span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] tracking-[0.16em]" style="${getHighlightTextStyle()}">${escapeHtml(String(folderItems.length))}</span>`
+        : `<span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] tracking-[0.16em] text-stone-400/72">${escapeHtml(String(folderItems.length))}</span>`;
 
       return `
         <button
@@ -4699,15 +5143,18 @@ function renderTripFolderButtons(trip, folders, selectedFolderId, view = "archiv
           data-view="${escapeHtml(view)}"
           data-trip-id="${escapeHtml(trip.id)}"
           data-folder-id="${escapeHtml(folder.id)}"
-          class="flex items-center gap-2 border px-3 py-3 text-left transition ${
-            isSelected
+          class="flex w-full min-w-0 items-center justify-between gap-3 border px-3 py-3 text-left transition ${
+            highlightFolder
+              ? "border-transparent bg-[rgba(16,12,3,0.16)] text-stone-100 hover:opacity-95"
+              : isSelected
               ? "border-stone-100 bg-white/[0.08] text-stone-100"
               : "border-white/10 bg-black/20 text-stone-200 hover:border-white/28 hover:bg-white/[0.04]"
-          }"
+          }"${buttonStyle ? ` style="${buttonStyle}"` : ""}
         >
-          <span class="text-sm uppercase tracking-[0.14em]">${escapeHtml(buildFolderButtonLabel(trip, folder))}</span>
-          <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] tracking-[0.16em] text-stone-400/72">${escapeHtml(String(folderItems.length))}</span>
+          <span class="min-w-0 flex-1 break-words text-sm uppercase tracking-[0.14em]">${labelMarkup}</span>
+          <span class="shrink-0">${countMarkup}</span>
         </button>
+        ${isSelected ? mobileActiveFolderPanelMarkup : ""}
       `;
     })
     .join("");
@@ -4766,11 +5213,12 @@ function renderItemRows(items, tripId, folderId, view = "archive") {
   if (items.length === 0) {
     return `
       <tr class="text-stone-300/45 uppercase">
-        <td class="border-b border-white/8 px-3 py-4">${STRINGS.items.noObjects}</td>
-        <td class="border-b border-white/8 px-3 py-4">----</td>
-        <td class="border-b border-white/8 px-3 py-4">${STRINGS.items.emptyName}</td>
-        <td class="border-b border-white/8 px-3 py-4">${STRINGS.items.emptyName}</td>
-        <td class="border-b border-white/8 px-3 py-4">${STRINGS.items.emptyName}</td>
+        <td class="border-b border-white/8 px-2 py-2.5">${STRINGS.items.noObjects}</td>
+        <td class="border-b border-white/8 px-2 py-2.5">----</td>
+        <td class="border-b border-white/8 px-2 py-2.5">${STRINGS.items.emptyName}</td>
+        <td class="border-b border-white/8 px-2 py-2.5">${STRINGS.items.emptyName}</td>
+        <td class="border-b border-white/8 px-2 py-2.5">${STRINGS.items.emptyName}</td>
+        <td class="border-b border-white/8 px-2 py-2.5">${STRINGS.items.emptyName}</td>
       </tr>
     `;
   }
@@ -4778,13 +5226,17 @@ function renderItemRows(items, tripId, folderId, view = "archive") {
   return items
     .map((item) => {
       const displayName = getItemDisplayName(item);
+      const certifiedRow = isItemCertified(item);
       const typeLabel =
         item.kind === "text"
           ? STRINGS.items.post
           : item.extension || simplifyMimeType(item.mimeType) || "FILE";
-      const preview = renderItemPreview(item, tripId, folderId, view);
+      const sourceFolderId = resolveItemSourceFolderId(item, folderId);
+      const preview = renderItemPreview(item, tripId, folderId, view, certifiedRow);
       const author = renderItemAuthor(item);
-      const meta = renderItemMeta(item, tripId, folderId);
+      const certified = renderItemCertified(item);
+      const meta = renderItemMeta(item, tripId, sourceFolderId);
+      const cellBorderClass = "border-b border-white/8";
       const nameMarkup =
         item.kind === "text"
           ? `<div class="text-stone-100">${escapeHtml(item.title || item.name)}</div>`
@@ -4793,37 +5245,66 @@ function renderItemRows(items, tripId, folderId, view = "archive") {
             )}" target="_blank" rel="noreferrer">${escapeHtml(displayName)}</a>`;
 
       return `
-        <tr class="align-top transition hover:bg-white/[0.03]">
-          <td class="min-w-[8.5rem] border-b border-white/8 px-3 py-4">${preview}</td>
-          <td class="min-w-[10rem] border-b border-white/8 px-3 py-4">${nameMarkup}</td>
-          <td class="w-24 min-w-[5.5rem] border-b border-white/8 px-3 py-4 uppercase text-stone-300/72">${escapeHtml(
+        <tr class="align-top transition hover:bg-white/[0.03]${certifiedRow ? " bg-[rgba(255,221,138,0.012)]" : ""}"${certifiedRow ? ` style="${getCertifiedRowStyle()}"` : ""}>
+          <td class="min-w-[2.65rem] ${cellBorderClass} px-1 py-1.5 sm:min-w-[3rem] sm:px-1.5 sm:py-2 lg:min-w-[3.4rem]">${preview}</td>
+          <td class="min-w-[5.5rem] ${cellBorderClass} px-1.5 py-2 sm:min-w-[7rem] sm:px-2 lg:min-w-[9rem]">${nameMarkup}</td>
+          <td class="min-w-[3.25rem] ${cellBorderClass} px-1.5 py-2 uppercase text-stone-300/72 sm:min-w-[4rem] sm:px-2 lg:min-w-[4.75rem]">${escapeHtml(
             typeLabel
           )}</td>
-          <td class="min-w-[8rem] border-b border-white/8 px-3 py-4 uppercase text-stone-300/72">${author}</td>
-          <td class="min-w-[12rem] border-b border-white/8 px-3 py-4 uppercase text-stone-300/72">${meta}</td>
+          <td class="min-w-[4.1rem] ${cellBorderClass} px-1.5 py-2 uppercase text-stone-300/72 sm:min-w-[5.25rem] sm:px-2 lg:min-w-[6.5rem]">${author}</td>
+          <td class="min-w-[4.8rem] ${cellBorderClass} px-1.5 py-2 uppercase text-stone-300/72 sm:min-w-[6rem] sm:px-2 lg:min-w-[7.5rem]">${certified}</td>
+          <td class="min-w-[6.5rem] ${cellBorderClass} px-1.5 py-2 uppercase text-stone-300/72 sm:min-w-[8rem] sm:px-2 lg:min-w-[10rem]">${meta}</td>
         </tr>
       `;
     })
     .join("");
 }
 
+function renderItemCertified(item) {
+  if (!isItemCertified(item)) {
+    return "";
+  }
+
+  return `<span class="font-['Teko',sans-serif] text-[1.15rem] leading-none tracking-[0.18em]" style="${getHighlightTextStyle()}">${escapeHtml(HIGHLIGHT_FOLDER_LABEL)}</span>`;
+}
+
 function renderItemMeta(item, tripId, folderId) {
   const adminContext = isAdminViewEnabled();
-  const neutralEditButtonClass = "inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]";
-  const accentMoveButtonClass = "inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08]";
-  const accentDeleteButtonClass = "inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-red-300/35 hover:bg-red-300/10 hover:text-red-100";
-  const adminActionButtonClass = "inline-flex border border-amber-300/32 bg-amber-100/[0.03] px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]";
+  const neutralEditButtonClass = "inline-flex border border-white/10 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]";
+  const accentMoveButtonClass = "inline-flex border border-white/10 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08]";
+  const accentDeleteButtonClass = "inline-flex border border-white/10 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-stone-200 transition hover:border-red-300/35 hover:bg-red-300/10 hover:text-red-100";
+  const adminActionButtonClass = "inline-flex border border-amber-300/32 bg-amber-100/[0.03] px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]";
+  const certifyButtonClass = "inline-flex h-6 w-6 items-center justify-center border border-amber-300/32 bg-amber-100/[0.03] px-0 py-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]";
+  const certifyActiveButtonClass = "inline-flex h-6 w-6 items-center justify-center border border-transparent px-0 py-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none text-amber-50 transition hover:opacity-95";
   const summary =
     item.kind === "text"
       ? STRINGS.items.textPost
       : `${formatBytes(item.size)} / ${escapeHtml(getItemDisplayName(item))}`;
   const descriptionMarkup =
     item.kind === "file" && item.description
-      ? `<div class="mt-2 normal-case text-[0.64rem] leading-5 tracking-[0.04em] text-stone-300/72">${escapeHtml(
+      ? `<div class="mt-1.5 normal-case text-[0.58rem] leading-4 tracking-[0.04em] text-stone-300/72">${escapeHtml(
           item.description
         )}</div>`
       : "";
   const actionButtons = [];
+
+  if (adminContext && item.kind === "file") {
+    actionButtons.push(`
+      <button
+        type="button"
+        data-action="toggle-certified"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="${isItemCertified(item) ? certifyActiveButtonClass : certifyButtonClass}"
+        ${isItemCertified(item) ? `style="${getHighlightButtonStyle(true)}"` : ""}
+        title="${isItemCertified(item) ? "Remove Certification" : "Certify Media"}"
+        aria-label="${isItemCertified(item) ? "Remove Certification" : "Certify Media"}"
+      >
+        ${isItemCertified(item) ? "&#9733;" : "&#9734;"}
+      </button>
+    `);
+  }
 
   if (canEditItem(item)) {
     actionButtons.push(`
@@ -4872,14 +5353,19 @@ function renderItemMeta(item, tripId, folderId) {
 
   const actionsMarkup =
     actionButtons.length > 0
-      ? `<div class="mt-3 flex flex-wrap gap-2">${actionButtons.join("")}</div>`
+      ? `<div class="mt-2 flex flex-wrap gap-1.5">${actionButtons.join("")}</div>`
       : "";
 
   return `${summary}${descriptionMarkup}${actionsMarkup}`;
 }
 
-function renderItemPreview(item, tripId, folderId, view = "archive") {
+function renderItemPreview(item, tripId, folderId, view = "archive", certified = false) {
   const displayName = getItemDisplayName(item);
+  const previewBorderClass = certified ? "border-amber-300/54" : "border-white/20";
+  const previewRingClass = certified ? "ring-1 ring-amber-300/46" : "ring-1 ring-white/18";
+  const previewPanelClass = certified
+    ? "bg-[linear-gradient(to_bottom,rgba(78,56,12,0.52),rgba(22,15,5,0.38))]"
+    : "bg-[linear-gradient(to_bottom,rgba(255,255,255,0.1),rgba(255,255,255,0.03))]";
 
   if (item.kind === "text") {
     return `
@@ -4890,21 +5376,21 @@ function renderItemPreview(item, tripId, folderId, view = "archive") {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="group flex h-20 w-[5.75rem] flex-col justify-between border border-white/12 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.06),rgba(255,255,255,0.01))] px-3 py-3 text-left transition hover:border-white/30 hover:bg-white/[0.06]"
+        class="group flex h-9 w-[2.55rem] flex-col justify-between border ${previewBorderClass} ${previewPanelClass} px-1 py-1 text-left shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025)] transition hover:border-white/30 hover:bg-white/[0.08] sm:h-10 sm:w-[2.75rem]"
         aria-label="Preview ${escapeHtml(displayName)}"
       >
-        <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.64rem] uppercase tracking-[0.18em] text-stone-100">TXT</span>
-        <span class="line-clamp-2 text-[0.62rem] uppercase tracking-[0.14em] text-stone-300/72 group-hover:text-stone-200">${escapeHtml(displayName)}</span>
+        <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.48rem] uppercase tracking-[0.08em] text-stone-100">TXT</span>
+        <span class="line-clamp-1 text-[0.42rem] uppercase tracking-[0.04em] text-stone-300/72 group-hover:text-stone-200">${escapeHtml(displayName)}</span>
       </button>
     `;
   }
 
   if (item.mimeType.startsWith("image/")) {
     return `
-      <a href="${escapeHtml(item.downloadURL)}" target="_blank" rel="noreferrer">
+      <a href="${escapeHtml(item.downloadURL)}" target="_blank" rel="noreferrer" class="inline-block border ${previewBorderClass} ${previewPanelClass} p-[1px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025)]">
         <img src="${escapeHtml(item.downloadURL)}" alt="${escapeHtml(
       displayName
-    )}" class="h-[4.5rem] w-[5.75rem] object-cover ring-1 ring-white/10">
+    )}" class="h-9 w-[2.55rem] object-cover ${previewRingClass} sm:h-10 sm:w-[2.75rem]">
       </a>
     `;
   }
@@ -4919,14 +5405,14 @@ function renderItemPreview(item, tripId, folderId, view = "archive") {
           data-trip-id="${escapeHtml(tripId)}"
           data-folder-id="${escapeHtml(folderId)}"
           data-item-id="${escapeHtml(item.id)}"
-          class="group relative inline-block transition hover:opacity-90"
+          class="group relative inline-block border ${previewBorderClass} ${previewPanelClass} p-[1px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025)] transition hover:opacity-90"
           aria-label="Preview ${escapeHtml(displayName)}"
         >
           <img src="${escapeHtml(item.posterDownloadURL)}" alt="${escapeHtml(
         displayName
-      )}" class="block h-[4.5rem] w-[5.75rem] overflow-hidden object-cover ring-1 ring-white/10">
+      )}" class="block h-9 w-[2.55rem] overflow-hidden object-cover ${previewRingClass} sm:h-10 sm:w-[2.75rem]">
           <span class="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span class="flex h-10 w-10 items-center justify-center rounded-full border border-white/18 bg-black/45 text-white/90">
+            <span class="flex h-[1.125rem] w-[1.125rem] items-center justify-center rounded-full border border-white/24 bg-black/62 text-[0.38rem] text-white/90 sm:h-5 sm:w-5 sm:text-[0.42rem]">
               &#9654;
             </span>
           </span>
@@ -4942,7 +5428,7 @@ function renderItemPreview(item, tripId, folderId, view = "archive") {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="inline-flex h-[4.5rem] w-[5.75rem] items-center justify-center border border-white/10 bg-black/35 text-[0.62rem] uppercase tracking-[0.16em] text-stone-300/72 transition hover:border-white/25 hover:text-stone-100"
+        class="inline-flex h-9 w-[2.55rem] items-center justify-center border ${previewBorderClass} ${certified ? "bg-[rgba(62,46,12,0.44)]" : "bg-[rgba(255,255,255,0.08)]"} text-[0.44rem] uppercase tracking-[0.06em] text-stone-300/72 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025)] transition hover:border-white/25 hover:text-stone-100 sm:h-10 sm:w-[2.75rem] sm:text-[0.5rem]"
         aria-label="Preview ${escapeHtml(displayName)}"
       >
         &#9654;
@@ -5169,10 +5655,17 @@ function getSelectedFolderId(tripId, view = "archive", fallbackFolders = null) {
   const folders = Array.isArray(fallbackFolders) ? fallbackFolders : getFoldersForTrip(tripId);
   const selectionMap = getFolderSelectionMap(view);
   const selectionKey = buildFolderSelectionKey(tripId, view);
+  const hasStoredSelection = selectionMap.has(selectionKey);
   const currentSelection = selectionMap.get(selectionKey);
 
-  if (currentSelection && folders.some((folder) => folder.id === currentSelection)) {
-    return currentSelection;
+  if (hasStoredSelection) {
+    if (!currentSelection) {
+      return "";
+    }
+
+    if (folders.some((folder) => folder.id === currentSelection)) {
+      return currentSelection;
+    }
   }
 
   if (folders.length === 0) {
@@ -5187,7 +5680,7 @@ function getSelectedFolderId(tripId, view = "archive", fallbackFolders = null) {
 
 function setSelectedFolderId(tripId, folderId, view = "archive") {
   const selectionMap = getFolderSelectionMap(view);
-  selectionMap.set(buildFolderSelectionKey(tripId, view), folderId);
+  selectionMap.set(buildFolderSelectionKey(tripId, view), String(folderId || ""));
 }
 
 function getFoldersForTrip(tripId) {
@@ -5231,7 +5724,61 @@ function isTripExpanded(tripId) {
   return false;
 }
 
+function isMobileTripLayout() {
+  return window.innerWidth < 1024;
+}
+
+function enforceSingleExpandedTripOnMobile() {
+  if (!isMobileTripLayout()) {
+    return false;
+  }
+
+  const expandedTripIds = trips
+    .map((trip) => trip.id)
+    .filter((tripId) => Boolean(expandedTrips.get(tripId)));
+
+  if (expandedTripIds.length <= 1) {
+    return false;
+  }
+
+  const keepTripId = expandedTripIds[0];
+  trips.forEach((trip) => {
+    expandedTrips.set(trip.id, trip.id === keepTripId);
+  });
+
+  return true;
+}
+
 function getItemsForFolder(tripId, folderId) {
+  if (isHighlightFolder(folderId)) {
+    const aggregatedItems = [];
+    const seenItems = new Set();
+
+    getFoldersForTrip(tripId)
+      .filter((folder) => !isHighlightFolder(folder))
+      .forEach((folder) => {
+        const folderItems = itemsByFolder.get(buildFolderCacheKey(tripId, folder.id)) || [];
+
+        folderItems.forEach((item) => {
+          if (!isItemCertified(item)) {
+            return;
+          }
+
+          const sourceFolderId = resolveItemSourceFolderId(item, folder.id);
+          const itemKey = `${sourceFolderId}:${item.id}`;
+
+          if (seenItems.has(itemKey)) {
+            return;
+          }
+
+          seenItems.add(itemKey);
+          aggregatedItems.push(item);
+        });
+      });
+
+    return aggregatedItems;
+  }
+
   return itemsByFolder.get(buildFolderCacheKey(tripId, folderId)) || [];
 }
 
@@ -5423,6 +5970,60 @@ function hasOwnProperty(value, key) {
   return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
 }
 
+function isHighlightFolder(value) {
+  if (!value) {
+    return false;
+  }
+
+  const slug = typeof value === "string"
+    ? value
+    : value.slug || value.label || value.id || "";
+
+  return slugifyFolder(slug) === HIGHLIGHT_FOLDER_ID;
+}
+
+function getFolderDisplaySlug(folder) {
+  if (!folder) {
+    return "";
+  }
+
+  return isHighlightFolder(folder)
+    ? HIGHLIGHT_FOLDER_LABEL
+    : String(folder.slug || folder.id || "");
+}
+
+function getHighlightTextStyle() {
+  return "-webkit-background-clip:text;background-clip:text;background-image:linear-gradient(135deg,#fff8cb 0%,#ffe57c 32%,#ffc93a 66%,#8a5600 100%);color:transparent;";
+}
+
+function getHighlightPanelTextStyle() {
+  return "color:#d2c08a;text-shadow:0 0 8px rgba(255,208,96,0.045);";
+}
+
+function getHighlightButtonStyle(isSelected = false) {
+  const fill = isSelected
+    ? "rgba(12,12,12,0.96),rgba(5,5,5,0.96)"
+    : "rgba(10,10,10,0.92),rgba(5,5,5,0.9)";
+
+  return `border-color:transparent;background-image:linear-gradient(${fill}),linear-gradient(135deg,#fff7be 0%,#ffe063 34%,#ffc021 68%,#7f5000 100%);background-origin:border-box;background-clip:padding-box,border-box;box-shadow:${isSelected ? "0 0 22px rgba(255,199,58,0.12)" : "inset 0 0 0 1px rgba(255,225,122,0.08)"};`;
+}
+
+function getHighlightPanelStyle() {
+  return "border-color:transparent;background-image:linear-gradient(rgba(9,9,9,0.972),rgba(5,5,5,0.962)),linear-gradient(135deg,rgba(233,211,132,0.58) 0%,rgba(198,151,55,0.56) 48%,rgba(122,86,18,0.66) 100%);background-origin:border-box;background-clip:padding-box,border-box;box-shadow:inset 0 0 0 1px rgba(255,225,122,0.022),0 0 12px rgba(255,191,31,0.025);";
+}
+
+function getCertifiedRowStyle() {
+  return "background-color:rgba(255,221,138,0.014);";
+}
+
+function isItemCertified(item) {
+  return Boolean(item?.certified);
+}
+
+function resolveItemSourceFolderId(item, fallbackFolderId = "") {
+  return String(item?.folderId || fallbackFolderId || "");
+}
+
 function buildFolderPathLabel(trip, folder) {
   if (!trip) {
     return "/";
@@ -5432,7 +6033,7 @@ function buildFolderPathLabel(trip, folder) {
     return `${trip.slug}/`;
   }
 
-  return `${trip.slug}/${folder.slug}/`;
+  return `${trip.slug}/${getFolderDisplaySlug(folder)}/`;
 }
 
 function buildFolderButtonLabel(trip, folder) {
@@ -5440,16 +6041,16 @@ function buildFolderButtonLabel(trip, folder) {
     return "/";
   }
 
-  return `${folder.slug}/`;
+  return `${getFolderDisplaySlug(folder)}/`;
 }
 
 function buildFolderSelectLabel(tripId, folder) {
   const trip = trips.find((item) => item.id === tripId);
   if (!trip) {
-    return folder.slug;
+    return getFolderDisplaySlug(folder);
   }
 
-  return `${folder.slug}/`;
+  return `${getFolderDisplaySlug(folder)}/`;
 }
 
 function pushUploadJob(job) {
@@ -5519,6 +6120,7 @@ function normalizeItem(item) {
     title: item?.title ? sanitizeUpper(item.title) : "",
     bodyText,
     description: String(item?.description || "").trim(),
+    certified: Boolean(item?.certified),
     mediaDateMs: Number(item?.mediaDateMs || 0),
     mimeType,
     extension: String(item?.extension || getFileExtension(String(item?.name || ""))).toLowerCase(),
@@ -5896,7 +6498,46 @@ function getNextFolderSortOrder(tripId) {
   );
 }
 
+function getHighlightFolderSortOrder(tripId) {
+  return (
+    getFoldersForTrip(tripId).reduce(
+      (min, folder) => Math.min(min, Number(folder.sortOrder) || 0),
+      0
+    ) - 1
+  );
+}
+
+function upsertHighlightFolderInState(tripId) {
+  if (!tripId) {
+    return;
+  }
+
+  if (getFoldersForTrip(tripId).some((folder) => isHighlightFolder(folder))) {
+    return;
+  }
+
+  const nextFolders = [
+    ...getFoldersForTrip(tripId),
+    normalizeFolder(
+      {
+        id: HIGHLIGHT_FOLDER_ID,
+        slug: HIGHLIGHT_FOLDER_ID,
+        label: HIGHLIGHT_FOLDER_LABEL,
+        kind: "highlight",
+        sortOrder: getHighlightFolderSortOrder(tripId),
+      },
+      0
+    ),
+  ].sort((left, right) => (Number(left.sortOrder) || 0) - (Number(right.sortOrder) || 0));
+
+  foldersByTrip.set(tripId, nextFolders);
+}
+
 function classifyFolderKind(folderSlug) {
+  if (isHighlightFolder(folderSlug)) {
+    return "highlight";
+  }
+
   return DAY_FOLDERS.includes(String(folderSlug).toLowerCase()) ? "day" : "custom";
 }
 
@@ -5909,9 +6550,28 @@ function parseFolderSeeds(value) {
   return [...new Set(normalized)];
 }
 
-function buildStorageFileName(file, index) {
-  const extension = getFileExtension(file.name);
-  const safeBase = sanitizeFileBaseName(file.name);
+function normalizeMediaDisplayName(value, fallbackName = "") {
+  const nextValue = String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+  const fallback = String(fallbackName || "").trim();
+  const extension = getFileExtension(fallback);
+
+  if (!nextValue) {
+    return fallback;
+  }
+
+  if (!extension || getFileExtension(nextValue)) {
+    return nextValue;
+  }
+
+  return `${nextValue}.${extension}`;
+}
+
+function buildStorageFileName(file, index, preferredName = "") {
+  const sourceName = normalizeMediaDisplayName(preferredName, file.name) || file.name;
+  const extension = getFileExtension(sourceName);
+  const safeBase = sanitizeFileBaseName(sourceName);
   const timestamp = buildUniqueStamp(index);
 
   return extension ? `${timestamp}-${safeBase}.${extension}` : `${timestamp}-${safeBase}`;

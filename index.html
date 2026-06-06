@@ -151,14 +151,6 @@
       }
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      #logo.logo-glitch-loop,
-      #logo.logo-glitch-loop::before,
-      #logo.logo-glitch-loop::after {
-        animation: none !important;
-      }
-    }
-
     #site-shell[data-page="profile"] {
       border-color: rgba(255, 255, 255, 0.14);
       box-shadow:
@@ -176,6 +168,69 @@
         );
       border-bottom-color: rgba(255, 255, 255, 0.12);
     }
+
+    .site-footer-ticker-mask {
+      position: relative;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .site-footer-ticker-mask::before,
+    .site-footer-ticker-mask::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3rem;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .site-footer-ticker-mask::before {
+      left: 0;
+      background: linear-gradient(to right, rgba(0, 0, 0, 0.94), transparent);
+    }
+
+    .site-footer-ticker-mask::after {
+      right: 0;
+      background: linear-gradient(to left, rgba(0, 0, 0, 0.94), transparent);
+    }
+
+    .site-footer-ticker-track {
+      display: inline-flex;
+      width: max-content;
+      animation: site-footer-ticker-scroll 38s linear infinite;
+      --ticker-shift: 16.666667%;
+      will-change: transform;
+    }
+
+    .site-footer-ticker-track:hover {
+      animation-play-state: paused;
+    }
+
+    .site-footer-ticker-segment {
+      flex-shrink: 0;
+      padding-right: 2.5rem;
+    }
+
+    @keyframes site-footer-ticker-scroll {
+      0% {
+        transform: translate3d(0, 0, 0);
+      }
+
+      100% {
+        transform: translate3d(calc(-1 * var(--ticker-shift)), 0, 0);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #logo.logo-glitch-loop,
+      #logo.logo-glitch-loop::before,
+      #logo.logo-glitch-loop::after,
+      .site-footer-ticker-track {
+        animation: none !important;
+      }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script type="module" src="/static/app.js"></script>
@@ -184,6 +239,12 @@
   <div aria-hidden="true" class="pointer-events-none fixed inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.035),transparent_16%),radial-gradient(circle_at_top,rgba(255,255,255,0.055),transparent_36%),linear-gradient(to_right,transparent,rgba(255,255,255,0.02),transparent)]"></div>
   <div aria-hidden="true" class="pointer-events-none fixed inset-0 opacity-15 mix-blend-screen bg-[repeating-linear-gradient(to_bottom,rgba(255,255,255,0.03)_0,rgba(255,255,255,0.03)_1px,transparent_1px,transparent_3px)]"></div>
   <div aria-hidden="true" class="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_center,transparent_60%,rgba(0,0,0,0.58)_100%)]"></div>
+
+  <div id="app-loading-overlay" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/84 opacity-100 transition-opacity duration-300">
+    <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.92rem] uppercase tracking-[0.28em] text-stone-100 sm:text-[1rem]">
+      &gt; LOADING...
+    </p>
+  </div>
 
   <section id="vault-gate" class="fixed inset-0 z-[60] flex items-center justify-center bg-black transition-opacity duration-700">
     <canvas id="vault-frame" class="absolute inset-0 h-full w-full"></canvas>
@@ -205,7 +266,7 @@
     </div>
   </section>
 
-  <main id="site-shell" aria-hidden="true" class="pointer-events-none relative m-2 min-h-[calc(100vh-1rem)] border border-white/10 bg-black/80 px-4 py-4 opacity-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025),0_0_80px_rgba(255,255,255,0.08)] transition-opacity duration-700 sm:m-4 sm:min-h-[calc(100vh-2rem)] sm:px-6 sm:py-5 md:px-10 md:py-7 lg:px-14 lg:py-9">
+  <main id="site-shell" aria-hidden="true" class="pointer-events-none relative m-2 min-h-[calc(100vh-1rem)] overflow-x-clip border border-white/10 bg-black/80 px-4 py-4 opacity-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025),0_0_80px_rgba(255,255,255,0.08)] transition-opacity duration-700 sm:m-4 sm:min-h-[calc(100vh-2rem)] sm:px-6 sm:py-5 md:px-10 md:py-7 lg:overflow-x-visible lg:px-14 lg:py-9">
     <div aria-hidden="true" class="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent_24%)]"></div>
 
     <div class="relative">
@@ -535,11 +596,20 @@
         </aside>
       </div>
 
-      <div id="edit-post-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
+      <footer id="site-footer" class="-mx-4 mt-8 border-t border-white/10 bg-[linear-gradient(to_right,rgba(255,255,255,0.02),rgba(255,255,255,0.006)_40%,rgba(255,255,255,0.02))] py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:-mx-6 sm:mt-10 sm:py-5 md:-mx-10 lg:-mx-14">
+        <div class="site-footer-ticker-mask border-y border-white/10 bg-black/35 py-3 sm:py-4">
+          <div id="footer-ticker-track" class="site-footer-ticker-track font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase leading-none tracking-[0.24em] text-stone-200/82 sm:text-[0.76rem] sm:tracking-[0.28em]">
+            <span class="site-footer-ticker-segment">100GIGZ - ARCHIVE - LOADING</span>
+            <span class="site-footer-ticker-segment" aria-hidden="true">100GIGZ - ARCHIVE - LOADING</span>
+          </div>
+        </div>
+      </footer>
+
+      <div id="edit-post-modal" class="fixed inset-0 z-50 hidden items-end justify-center overflow-y-auto p-2 sm:items-center sm:p-6">
         <div id="edit-post-backdrop" class="absolute inset-0 bg-black/72 backdrop-blur-sm"></div>
 
-        <form id="edit-post-form" class="relative w-full max-w-3xl border border-orange-300/45 bg-[linear-gradient(to_bottom,rgba(58,24,6,0.94),rgba(18,10,5,0.98))] shadow-[0_24px_96px_rgba(0,0,0,0.58)]">
-          <div class="flex flex-col gap-3 border-b border-orange-200/16 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+        <form id="edit-post-form" class="relative flex w-full max-w-3xl max-h-[calc(100vh-1rem)] flex-col overflow-hidden border border-orange-300/45 bg-[linear-gradient(to_bottom,rgba(58,24,6,0.94),rgba(18,10,5,0.98))] shadow-[0_24px_96px_rgba(0,0,0,0.58)] sm:max-h-[calc(100vh-3rem)]">
+          <div class="shrink-0 flex flex-col gap-3 border-b border-orange-200/16 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-5">
             <div class="min-w-0">
               <p id="edit-post-form-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-orange-100/82">
                 Edit Text Post
@@ -552,13 +622,18 @@
             </button>
           </div>
 
-          <div class="space-y-4 px-5 py-5 sm:px-6 sm:py-6">
+          <div class="min-h-0 overflow-y-auto space-y-4 px-4 py-4 sm:px-6 sm:py-6">
             <label id="edit-post-alias-shell" class="hidden block">
               <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Author Alias</span>
               <select id="edit-post-author-mode-select" name="authorMode" class="w-full border border-orange-300/24 bg-orange-950/45 px-3 py-3 text-sm uppercase tracking-[0.16em] text-stone-100 outline-none transition focus:border-orange-200/48"></select>
             </label>
 
             <p id="edit-post-file-name" class="hidden font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/62"></p>
+
+            <label id="edit-post-media-name-shell" class="hidden block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Media Name</span>
+              <input id="edit-post-media-name-input" name="mediaName" maxlength="120" placeholder="CLIP-01.MP4" class="w-full border border-orange-300/24 bg-orange-950/45 px-3 py-3 text-sm tracking-[0.1em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-orange-200/48">
+            </label>
 
             <label id="edit-post-title-shell" class="block">
               <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Post title</span>
@@ -576,7 +651,7 @@
             </label>
           </div>
 
-          <div class="flex flex-col gap-3 border-t border-orange-200/16 px-5 py-5 sm:flex-row sm:justify-end sm:px-6">
+          <div class="shrink-0 flex flex-col gap-3 border-t border-orange-200/16 px-4 py-4 sm:flex-row sm:justify-end sm:px-6 sm:py-5">
             <button id="edit-post-cancel-button" type="button" class="w-full border border-orange-300/28 bg-orange-100/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-orange-100/84 transition hover:border-orange-200/48 hover:bg-orange-100/[0.08] sm:w-auto sm:min-w-44">
               Cancel Edit
             </button>
@@ -625,10 +700,11 @@
       <div id="video-preview-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
         <div id="video-preview-backdrop" class="absolute inset-0 bg-black/82 backdrop-blur-sm"></div>
 
-        <div class="relative w-full max-w-5xl border border-white/12 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.62)]">
+        <div id="video-preview-shell" class="relative w-full max-w-5xl border border-white/12 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.62)]">
           <div class="flex flex-col gap-3 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
             <div class="min-w-0">
               <p id="video-preview-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.2em] text-stone-200/82"></p>
+              <p id="video-preview-badge" class="mt-2 hidden font-['Teko',sans-serif] text-[1.15rem] uppercase leading-none tracking-[0.16em] text-amber-200/90"></p>
             </div>
             <button id="video-preview-close-button" type="button" class="border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]">
               Close Preview
@@ -645,16 +721,18 @@
                 Next &rarr;
               </button>
             </div>
-            <video id="video-preview-player" class="max-h-[78vh] w-full bg-black" controls autoplay playsinline preload="metadata"></video>
+            <div id="video-preview-frame" class="border border-white/12 bg-black/70 p-1.5 sm:p-2">
+              <video id="video-preview-player" class="max-h-[78vh] w-full bg-black" controls autoplay playsinline preload="metadata"></video>
+            </div>
           </div>
         </div>
       </div>
 
-      <div id="contribute-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
+      <div id="contribute-modal" class="fixed inset-0 z-50 hidden items-end justify-center overflow-y-auto p-2 sm:items-center sm:p-6">
         <div id="contribute-backdrop" class="absolute inset-0 bg-black/78 backdrop-blur-sm"></div>
 
-        <div class="relative w-full max-w-4xl border border-white/12 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.62)]">
-          <div class="flex flex-col gap-3 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+        <div class="relative flex w-full max-w-4xl max-h-[calc(100vh-1rem)] flex-col overflow-hidden border border-white/12 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.62)] sm:max-h-[calc(100vh-3rem)]">
+          <div class="shrink-0 flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-5">
             <div class="min-w-0">
               <p id="contribute-modal-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-100/78">
                 Add To Folder
@@ -666,7 +744,7 @@
             </button>
           </div>
 
-          <div class="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+          <div class="min-h-0 overflow-y-auto space-y-4 px-4 py-4 sm:px-6 sm:py-6">
             <div id="contribute-mode-picker" class="grid gap-3 sm:grid-cols-2">
               <button type="button" data-action="set-contribute-mode" data-mode="upload" class="border border-white/12 bg-white/[0.03] px-4 py-4 text-left transition hover:border-white/30 hover:bg-white/[0.06]">
                 <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-200">Upload Media</p>
@@ -692,6 +770,11 @@
                 <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Files</span>
                 <input id="upload-files-input" name="files" type="file" multiple accept="image/*,video/*" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition file:mr-4 file:border-0 file:bg-white/8 file:px-3 file:py-2 file:font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] file:text-[0.68rem] file:uppercase file:tracking-[0.18em] file:text-stone-200 focus:border-white/35" required>
               </label>
+
+              <div id="upload-file-name-list-shell" class="hidden space-y-3">
+                <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Media Names</p>
+                <div id="upload-file-name-list" class="space-y-3"></div>
+              </div>
 
               <label class="block">
                 <span id="upload-description-label" class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Description</span>
