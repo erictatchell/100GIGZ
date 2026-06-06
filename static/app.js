@@ -70,7 +70,9 @@ const authWarning = document.getElementById("auth-warning");
 const signOutButton = document.getElementById("sign-out-button");
 const googleButton = document.getElementById("google-signin-button");
 const scrollBanner = document.getElementById("scroll-banner");
-const contributePanel = document.getElementById("contribute-panel");
+const scrollBannerContext = document.getElementById("scroll-banner-context");
+const headerRouteContext = document.getElementById("header-route-context");
+const uploadQueuePanel = document.getElementById("upload-queue-panel");
 const adminPanel = document.getElementById("admin-panel");
 const adminPanelsControl = document.getElementById("admin-panels-control");
 const adminPanelsToggle = document.getElementById("admin-panels-toggle");
@@ -82,6 +84,8 @@ const mobileMenuToggle = document.getElementById("mobile-menu-toggle");
 const mobileMenuToggleLabel = document.getElementById("mobile-menu-toggle-label");
 const mobileMenuPanel = document.getElementById("mobile-menu-panel");
 const mobileMenuBackdrop = document.getElementById("mobile-menu-backdrop");
+const scrollBannerMobileMenuSlot = document.getElementById("scroll-banner-mobile-menu-slot");
+const headerMobileMenuSlot = document.getElementById("header-mobile-menu-slot");
 const bannerRouteToggleLink = document.getElementById("banner-route-toggle-link");
 const bannerGoogleButton = document.getElementById("banner-google-signin-button");
 const bannerSignOutButton = document.getElementById("banner-sign-out-button");
@@ -114,13 +118,22 @@ const profilePage = document.getElementById("profile-page");
 const profilePageTitle = document.getElementById("profile-page-title");
 const profilePageSubtitle = document.getElementById("profile-page-subtitle");
 const profilePageHelper = document.getElementById("profile-page-helper");
+const profilePageStatus = document.getElementById("profile-page-status");
 const profileNameDisplay = document.getElementById("profile-name-display");
-const profileEmailDisplay = document.getElementById("profile-email-display");
+const profileRouteDisplay = document.getElementById("profile-route-display");
+const profileGoogleNameDisplay = document.getElementById("profile-google-name-display");
+const profilePostCountDisplay = document.getElementById("profile-post-count-display");
 const profileImagePreview = document.getElementById("profile-image-preview");
 const profileImageForm = document.getElementById("profile-image-form");
 const profileImageInput = document.getElementById("profile-image-input");
 const profileImageSubmit = document.getElementById("profile-image-submit");
 const profileCurrentImageLabel = document.getElementById("profile-current-image-label");
+const profileDetailsForm = document.getElementById("profile-details-form");
+const profileDisplayNameInput = document.getElementById("profile-display-name-input");
+const profileRouteInput = document.getElementById("profile-route-input");
+const profileDetailsSubmit = document.getElementById("profile-details-submit");
+const profileEmptyState = document.getElementById("profile-empty-state");
+const profileTripList = document.getElementById("profile-trip-list");
 
 const tripForm = document.getElementById("trip-form");
 const folderForm = document.getElementById("folder-form");
@@ -135,16 +148,28 @@ const textFolderSelect = document.getElementById("text-folder-select");
 const uploadFilesInput = document.getElementById("upload-files-input");
 const uploadDescriptionInput = document.getElementById("upload-description-input");
 const uploadDescriptionLabel = document.getElementById("upload-description-label");
+const uploadAuthorModeShell = document.getElementById("upload-author-mode-shell");
+const uploadAuthorModeSelect = document.getElementById("upload-author-mode-select");
 const textTitleInput = document.getElementById("text-title-input");
 const textBodyInput = document.getElementById("text-body-input");
 const textPostFormTitle = document.getElementById("text-post-form-title");
 const textPostSubmitButton = document.getElementById("text-post-submit-button");
+const textAuthorModeShell = document.getElementById("text-author-mode-shell");
+const textAuthorModeSelect = document.getElementById("text-author-mode-select");
 const editPostModal = document.getElementById("edit-post-modal");
 const editPostBackdrop = document.getElementById("edit-post-backdrop");
 const editPostForm = document.getElementById("edit-post-form");
 const editPostFormTitle = document.getElementById("edit-post-form-title");
 const editPostContext = document.getElementById("edit-post-context");
+const editPostAliasShell = document.getElementById("edit-post-alias-shell");
+const editPostAuthorModeSelect = document.getElementById("edit-post-author-mode-select");
+const editPostFileName = document.getElementById("edit-post-file-name");
+const editPostTitleShell = document.getElementById("edit-post-title-shell");
 const editPostTitleInput = document.getElementById("edit-post-title-input");
+const editPostDescriptionShell = document.getElementById("edit-post-description-shell");
+const editPostDescriptionLabel = document.getElementById("edit-post-description-label");
+const editPostDescriptionInput = document.getElementById("edit-post-description-input");
+const editPostBodyShell = document.getElementById("edit-post-body-shell");
 const editPostBodyInput = document.getElementById("edit-post-body-input");
 const editPostCloseButton = document.getElementById("edit-post-close-button");
 const editPostCancelButton = document.getElementById("edit-post-cancel-button");
@@ -165,6 +190,18 @@ const videoPreviewTitle = document.getElementById("video-preview-title");
 const videoPreviewPlayer = document.getElementById("video-preview-player");
 const videoPreviewPrevButton = document.getElementById("video-preview-prev-button");
 const videoPreviewNextButton = document.getElementById("video-preview-next-button");
+const contributeModal = document.getElementById("contribute-modal");
+const contributeBackdrop = document.getElementById("contribute-backdrop");
+const contributeCloseButton = document.getElementById("contribute-close-button");
+const contributeModalTitle = document.getElementById("contribute-modal-title");
+const contributeModalContext = document.getElementById("contribute-modal-context");
+const contributeModePicker = document.getElementById("contribute-mode-picker");
+const textPreviewModal = document.getElementById("text-preview-modal");
+const textPreviewBackdrop = document.getElementById("text-preview-backdrop");
+const textPreviewCloseButton = document.getElementById("text-preview-close-button");
+const textPreviewTitle = document.getElementById("text-preview-title");
+const textPreviewContext = document.getElementById("text-preview-context");
+const textPreviewBody = document.getElementById("text-preview-body");
 const featuredMessageForm = document.getElementById("featured-message-form");
 const featuredMessageFormTitle = document.getElementById("featured-message-form-title");
 const featuredMessageInputLabel = document.getElementById("featured-message-input-label");
@@ -174,7 +211,11 @@ const DEFAULT_PROFILE_IMAGE_URL = "/static/default-profile.svg";
 const ROLE_FRIEND = "friend";
 const ROLE_ADMIN = "admin";
 const ROUTE_ARCHIVE = "archive";
-const ROUTE_PROFILE = "profile";
+const ROUTE_PROFILE_SELF = "profile-self";
+const ROUTE_PROFILE_PUBLIC = "profile-public";
+const ROUTE_UNKNOWN = "unknown";
+const AUTHOR_ALIAS_BRAND = "brand";
+const AUTHOR_ALIAS_SELF = "self";
 const MAX_VIDEO_UPLOADS_PER_DAY = 10;
 const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 const MAX_PROFILE_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -206,13 +247,19 @@ let friends = [];
 let hasSeenPersistedTrips = false;
 let needsDefaultTripSeed = false;
 let currentTextPostEdit = null;
+let currentItemEdit = null;
 let adminPanelsVisible = false;
 let mobileMenuOpen = false;
 let editPostModalOpen = false;
 let moveItemModalOpen = false;
 let videoPreviewModalOpen = false;
+let contributeModalOpen = false;
+let textPreviewModalOpen = false;
 let currentVideoPreviewContext = null;
 let currentItemMove = null;
+let currentContributionContext = null;
+let currentTextPreviewContext = null;
+let profileSelectedFolders = new Map();
 let currentRoute = normalizeRoute(window.location.pathname);
 let featuredMessage = DEFAULT_FEATURED_MESSAGE;
 let vaultState = {
@@ -309,6 +356,10 @@ function applyStaticStrings() {
     uploadDescriptionLabel.textContent = STRINGS.uploads.descriptionLabel;
   }
 
+  if (editPostDescriptionLabel) {
+    editPostDescriptionLabel.textContent = STRINGS.uploads.descriptionLabel;
+  }
+
   if (uploadDescriptionInput) {
     uploadDescriptionInput.placeholder = STRINGS.uploads.descriptionPlaceholder;
   }
@@ -351,6 +402,10 @@ function applyStaticStrings() {
 
   if (profileImageSubmit) {
     profileImageSubmit.textContent = STRINGS.profile.uploadButton;
+  }
+
+  if (profileDetailsSubmit) {
+    profileDetailsSubmit.textContent = STRINGS.profile.saveButton;
   }
 
   if (featuredMessageFormTitle) {
@@ -853,10 +908,12 @@ function initializeAuthListener() {
     } else {
       friendAccessIssue = false;
       resetTextPostEditor();
+      resetContributeDialog();
+      resetTextPreview();
       resetItemMoveDialog();
       adminPanelsVisible = false;
       setMobileMenuOpen(false);
-      if (currentRoute === ROUTE_PROFILE) {
+      if (currentRoute?.kind === ROUTE_PROFILE_SELF) {
         navigateToRoute(ROUTE_ARCHIVE, { replace: true });
       }
     }
@@ -889,6 +946,7 @@ function setupForms() {
   editPostForm?.addEventListener("submit", handleEditTextPostSubmit);
   moveItemForm?.addEventListener("submit", handleMoveItemSubmit);
   profileImageForm?.addEventListener("submit", handleProfileImageSubmit);
+  profileDetailsForm?.addEventListener("submit", handleProfileDetailsSubmit);
   editPostCloseButton?.addEventListener("click", resetTextPostEditor);
   editPostCancelButton?.addEventListener("click", resetTextPostEditor);
   editPostBackdrop?.addEventListener("click", resetTextPostEditor);
@@ -899,6 +957,11 @@ function setupForms() {
   videoPreviewBackdrop?.addEventListener("click", resetVideoPreview);
   videoPreviewPrevButton?.addEventListener("click", () => navigateVideoPreview(-1));
   videoPreviewNextButton?.addEventListener("click", () => navigateVideoPreview(1));
+  contributeCloseButton?.addEventListener("click", resetContributeDialog);
+  contributeBackdrop?.addEventListener("click", resetContributeDialog);
+  contributeModal?.addEventListener("click", handleContributeModalClick);
+  textPreviewCloseButton?.addEventListener("click", resetTextPreview);
+  textPreviewBackdrop?.addEventListener("click", resetTextPreview);
   signOutButton?.addEventListener("click", handleSignOut);
   bannerSignOutButton?.addEventListener("click", handleSignOut);
   adminPanelsToggle?.addEventListener("change", handleAdminPanelsToggleChange);
@@ -910,6 +973,9 @@ function setupForms() {
   bannerGoogleButton?.addEventListener("click", handleGoogleSignIn);
   uploadTripSelect?.addEventListener("change", renderAdminSelects);
   textTripSelect?.addEventListener("change", renderAdminSelects);
+  profileRouteInput?.addEventListener("input", handleProfileRouteInput);
+  profileTripList?.addEventListener("click", handleProfileTripBrowserClick);
+  profileTripList?.addEventListener("change", handleProfileTripBrowserChange);
   friendsDesktopList?.addEventListener("change", handleRoleSelectChange);
   friendsMobileList?.addEventListener("change", handleRoleSelectChange);
   friendsMobileInlineList?.addEventListener("change", handleRoleSelectChange);
@@ -933,6 +999,11 @@ function handleMobileMenuToggleClick() {
 }
 
 function handleWindowKeydown(event) {
+  if (textPreviewModalOpen && event.key === "Escape") {
+    resetTextPreview();
+    return;
+  }
+
   if (videoPreviewModalOpen) {
     if (event.key === "Escape") {
       resetVideoPreview();
@@ -953,6 +1024,11 @@ function handleWindowKeydown(event) {
   }
 
   if (event.key === "Escape") {
+    if (contributeModalOpen) {
+      resetContributeDialog();
+      return;
+    }
+
     if (moveItemModalOpen) {
       resetItemMoveDialog();
       return;
@@ -976,10 +1052,6 @@ function syncResponsivePanels() {
     authTargetSlot.appendChild(authPanel);
   }
 
-  if (contributePanel && targetSlot && contributePanel.parentElement !== targetSlot) {
-    targetSlot.appendChild(contributePanel);
-  }
-
   if (adminPanel && targetSlot && adminPanel.parentElement !== targetSlot) {
     targetSlot.appendChild(adminPanel);
   }
@@ -1000,6 +1072,91 @@ function shouldShowScrollBanner() {
   return window.scrollY > 0 && logoRect.bottom <= 0;
 }
 
+function moveMobileMenuToggle(targetSlot) {
+  if (!mobileMenuToggle || !targetSlot || mobileMenuToggle.parentElement === targetSlot) {
+    return;
+  }
+
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const firstRect = mobileMenuToggle.getBoundingClientRect();
+
+  targetSlot.appendChild(mobileMenuToggle);
+
+  if (prefersReducedMotion || !firstRect.width || !firstRect.height) {
+    return;
+  }
+
+  const lastRect = mobileMenuToggle.getBoundingClientRect();
+  const deltaX = firstRect.left - lastRect.left;
+  const deltaY = firstRect.top - lastRect.top;
+
+  if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+    return;
+  }
+
+  mobileMenuToggle.style.willChange = "transform";
+  mobileMenuToggle.style.transition = "none";
+  mobileMenuToggle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+  mobileMenuToggle.getBoundingClientRect();
+
+  requestAnimationFrame(() => {
+    if (!mobileMenuToggle) {
+      return;
+    }
+
+    mobileMenuToggle.style.transition = "";
+    mobileMenuToggle.style.transform = "";
+    mobileMenuToggle.addEventListener("transitionend", () => {
+      mobileMenuToggle.style.willChange = "";
+    }, { once: true });
+  });
+}
+
+function syncMobileMenuPanelPosition() {
+  if (!mobileMenuPanel || !mobileMenuToggle || window.innerWidth >= 1280) {
+    if (mobileMenuPanel) {
+      mobileMenuPanel.style.top = "";
+      mobileMenuPanel.style.right = "";
+      mobileMenuPanel.style.maxHeight = "";
+    }
+
+    return;
+  }
+
+  const toggleRect = mobileMenuToggle.getBoundingClientRect();
+  const topOffset = Math.max(Math.round(toggleRect.bottom + 12), 72);
+  const bottomGap = window.innerWidth >= 640 ? 24 : 16;
+  const panelHeight = Math.max(window.innerHeight - topOffset - bottomGap, 220);
+
+  mobileMenuPanel.style.top = `${topOffset}px`;
+  mobileMenuPanel.style.maxHeight = `${panelHeight}px`;
+
+  if (window.innerWidth >= 640) {
+    mobileMenuPanel.style.right = `${Math.max(Math.round(window.innerWidth - toggleRect.right), 24)}px`;
+  } else {
+    mobileMenuPanel.style.right = "";
+  }
+}
+
+function syncMobileMenuTogglePlacement(showScrollBanner = shouldShowScrollBanner()) {
+  if (!mobileMenuToggle) {
+    return;
+  }
+
+  const mobileViewport = window.innerWidth < 1280;
+  const targetSlot = mobileViewport
+    ? (showScrollBanner ? scrollBannerMobileMenuSlot : headerMobileMenuSlot)
+    : headerMobileMenuSlot;
+
+  mobileMenuToggle.classList.toggle("hidden", !mobileViewport);
+
+  if (targetSlot) {
+    moveMobileMenuToggle(targetSlot);
+  }
+
+  syncMobileMenuPanelPosition();
+}
+
 function syncScrollBannerVisibility() {
   const shouldShow = shouldShowScrollBanner();
 
@@ -1010,6 +1167,8 @@ function syncScrollBannerVisibility() {
     scrollBanner.classList.toggle("opacity-100", shouldShow);
     scrollBanner.classList.toggle("translate-y-0", shouldShow);
   }
+
+  syncMobileMenuTogglePlacement(shouldShow);
 }
 
 function getSettingsCollectionName() {
@@ -1039,6 +1198,8 @@ function setMobileMenuOpen(nextOpen) {
   if (mobileMenuToggle) {
     mobileMenuToggle.setAttribute("aria-expanded", String(mobileMenuOpen));
   }
+
+  syncMobileMenuPanelPosition();
 }
 
 function handleWindowPopstate() {
@@ -1047,16 +1208,33 @@ function handleWindowPopstate() {
 }
 
 function handleRouteToggleClick() {
-  navigateToRoute(currentRoute === ROUTE_PROFILE ? ROUTE_ARCHIVE : ROUTE_PROFILE);
+  navigateToRoute(isProfileRoute() ? ROUTE_ARCHIVE : getOwnProfileRoute());
 }
 
 function normalizeRoute(pathname) {
-  return pathname === "/profile" ? ROUTE_PROFILE : ROUTE_ARCHIVE;
+  const normalizedPath = String(pathname || "/")
+    .split("?")[0]
+    .replace(/\/+$/, "") || "/";
+  const segment = normalizedPath === "/" ? "" : normalizedPath.slice(1);
+
+  if (!segment) {
+    return { kind: ROUTE_ARCHIVE };
+  }
+
+  if (segment.toLowerCase() === "profile") {
+    return { kind: ROUTE_PROFILE_SELF };
+  }
+
+  if (isValidRouteId(segment.toUpperCase())) {
+    return { kind: ROUTE_PROFILE_PUBLIC, routeId: segment.toUpperCase() };
+  }
+
+  return { kind: ROUTE_UNKNOWN, segment };
 }
 
 function navigateToRoute(route, options = {}) {
-  const normalizedRoute = route === ROUTE_PROFILE ? ROUTE_PROFILE : ROUTE_ARCHIVE;
-  const targetPath = normalizedRoute === ROUTE_PROFILE ? "/profile" : "/";
+  const normalizedRoute = normalizeNextRoute(route);
+  const targetPath = resolveRoutePath(normalizedRoute);
 
   if (window.location.pathname !== targetPath) {
     const method = options.replace ? "replaceState" : "pushState";
@@ -1066,6 +1244,56 @@ function navigateToRoute(route, options = {}) {
   currentRoute = normalizedRoute;
   setMobileMenuOpen(false);
   renderAll();
+}
+
+function normalizeNextRoute(route) {
+  if (!route || route === ROUTE_ARCHIVE || route?.kind === ROUTE_ARCHIVE) {
+    return { kind: ROUTE_ARCHIVE };
+  }
+
+  if (route === ROUTE_PROFILE_SELF || route?.kind === ROUTE_PROFILE_SELF) {
+    return { kind: ROUTE_PROFILE_SELF };
+  }
+
+  if (route === ROUTE_PROFILE_PUBLIC || route?.kind === ROUTE_PROFILE_PUBLIC) {
+    const routeId = normalizeRouteId(route?.routeId || currentUserProfile?.routeId);
+    return routeId
+      ? { kind: ROUTE_PROFILE_PUBLIC, routeId }
+      : { kind: ROUTE_PROFILE_SELF };
+  }
+
+  return normalizeRoute(resolveRoutePath(route));
+}
+
+function resolveRoutePath(route = currentRoute) {
+  if (route?.kind === ROUTE_PROFILE_PUBLIC && route.routeId) {
+    return buildProfilePath(route.routeId);
+  }
+
+  if (route?.kind === ROUTE_PROFILE_SELF) {
+    return "/profile";
+  }
+
+  if (route?.kind === ROUTE_UNKNOWN && route.segment) {
+    return `/${route.segment}`;
+  }
+
+  return "/";
+}
+
+function isProfileRoute(route = currentRoute) {
+  return (
+    route?.kind === ROUTE_PROFILE_SELF ||
+    route?.kind === ROUTE_PROFILE_PUBLIC ||
+    route?.kind === ROUTE_UNKNOWN
+  );
+}
+
+function getOwnProfileRoute() {
+  const routeId = normalizeRouteId(currentUserProfile?.routeId);
+  return routeId
+    ? { kind: ROUTE_PROFILE_PUBLIC, routeId }
+    : { kind: ROUTE_PROFILE_SELF };
 }
 
 function setEditPostModalOpen(nextOpen) {
@@ -1093,6 +1321,161 @@ function setMoveItemModalOpen(nextOpen) {
     moveItemModal.classList.toggle("hidden", !moveItemModalOpen);
     moveItemModal.classList.toggle("flex", moveItemModalOpen);
   }
+}
+
+function setContributeModalOpen(nextOpen) {
+  contributeModalOpen = Boolean(nextOpen);
+
+  if (contributeModal) {
+    contributeModal.classList.toggle("hidden", !contributeModalOpen);
+    contributeModal.classList.toggle("flex", contributeModalOpen);
+  }
+
+  syncUploadQueueVisibility();
+}
+
+function setTextPreviewModalOpen(nextOpen) {
+  textPreviewModalOpen = Boolean(nextOpen);
+
+  if (textPreviewModal) {
+    textPreviewModal.classList.toggle("hidden", !textPreviewModalOpen);
+    textPreviewModal.classList.toggle("flex", textPreviewModalOpen);
+  }
+}
+
+function setContributeMode(mode = "") {
+  const normalizedMode = mode === "upload" || mode === "text" ? mode : "";
+
+  if (currentContributionContext) {
+    currentContributionContext.mode = normalizedMode;
+  }
+
+  if (uploadForm) {
+    uploadForm.classList.toggle("hidden", normalizedMode !== "upload");
+  }
+
+  if (textPostForm) {
+    textPostForm.classList.toggle("hidden", normalizedMode !== "text");
+  }
+
+  syncUploadQueueVisibility();
+}
+
+function beginContribution(tripId, folderId) {
+  if (!canUploadMedia()) {
+    authDetail.textContent = STRINGS.uploads.signInRequired;
+    return;
+  }
+
+  const trip = trips.find((entry) => entry.id === tripId);
+  const folder = getFoldersForTrip(tripId).find((entry) => entry.id === folderId);
+
+  if (!trip || !folder) {
+    return;
+  }
+
+  currentContributionContext = { tripId, folderId, mode: "" };
+
+  if (contributeModalTitle) {
+    contributeModalTitle.textContent = "ADD TO FOLDER";
+  }
+
+  if (contributeModalContext) {
+    contributeModalContext.textContent = buildFolderPathLabel(trip, folder);
+  }
+
+  uploadForm?.reset();
+  textPostForm?.reset();
+  syncAuthorModeField(uploadAuthorModeSelect, uploadAuthorModeShell, AUTHOR_ALIAS_BRAND);
+  syncAuthorModeField(textAuthorModeSelect, textAuthorModeShell, AUTHOR_ALIAS_BRAND);
+  setContributeMode("");
+  setContributeModalOpen(true);
+}
+
+function handleContributeModalClick(event) {
+  const modeTrigger = event.target.closest("[data-action='set-contribute-mode']");
+
+  if (modeTrigger) {
+    setContributeMode(String(modeTrigger.getAttribute("data-mode") || ""));
+    return;
+  }
+
+  if (event.target.closest("[data-action='show-contribute-menu']")) {
+    setContributeMode("");
+  }
+}
+
+function resetContributeDialog() {
+  currentContributionContext = null;
+  uploadForm?.reset();
+  textPostForm?.reset();
+  setContributeMode("");
+  setContributeModalOpen(false);
+}
+
+function openTextPreview(tripId, folderId, itemId) {
+  const item = getItemsForFolder(tripId, folderId).find((entry) => entry.id === itemId);
+  const trip = trips.find((entry) => entry.id === tripId);
+  const folder = getFoldersForTrip(tripId).find((entry) => entry.id === folderId);
+
+  if (!item || item.kind !== "text") {
+    return;
+  }
+
+  currentTextPreviewContext = { tripId, folderId, itemId };
+
+  if (textPreviewTitle) {
+    textPreviewTitle.textContent = getItemDisplayName(item);
+  }
+
+  if (textPreviewContext) {
+    textPreviewContext.textContent = buildFolderPathLabel(trip, folder);
+  }
+
+  if (textPreviewBody) {
+    textPreviewBody.textContent = item.bodyText || "";
+  }
+
+  setTextPreviewModalOpen(true);
+}
+
+function resetTextPreview() {
+  currentTextPreviewContext = null;
+
+  if (textPreviewTitle) {
+    textPreviewTitle.textContent = "";
+  }
+
+  if (textPreviewContext) {
+    textPreviewContext.textContent = "";
+  }
+
+  if (textPreviewBody) {
+    textPreviewBody.textContent = "";
+  }
+
+  setTextPreviewModalOpen(false);
+}
+
+function handleProfileRouteInput(event) {
+  const target = event.target;
+
+  if (!target) {
+    return;
+  }
+
+  target.value = String(target.value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 3);
+}
+
+function handleProfileTripBrowserClick(event) {
+  handleTripBrowserClick(event);
+}
+
+function handleProfileTripBrowserChange(event) {
+  handleTripBrowserChange(event);
 }
 
 function syncAdminPanelsToggle() {
@@ -1226,10 +1609,13 @@ async function handleProfileImageSubmit(event) {
       {
         uid: currentUser.uid,
         email: currentUser.email || "",
-        displayName:
-          String(currentUserProfile?.displayName || "").trim() ||
-          String(currentUser.displayName || "").trim() ||
-          inferNameFromEmail(currentUser.email),
+        displayName: normalizeDisplayName(currentUserProfile?.displayName),
+        googleName: normalizePersonName(
+          currentUserProfile?.googleName ||
+            currentUser.displayName ||
+            inferNameFromEmail(currentUser.email)
+        ),
+        routeId: normalizeRouteId(currentUserProfile?.routeId),
         photoURL: downloadURL,
         photoStoragePath: storagePath,
         role: getCurrentUserRole(),
@@ -1255,10 +1641,13 @@ async function handleProfileImageSubmit(event) {
       ...(currentUserProfile || {}),
       uid: currentUser.uid,
       email: currentUser.email || "",
-      displayName:
-        String(currentUserProfile?.displayName || "").trim() ||
-        String(currentUser.displayName || "").trim() ||
-        inferNameFromEmail(currentUser.email),
+      displayName: normalizeDisplayName(currentUserProfile?.displayName),
+      googleName: normalizePersonName(
+        currentUserProfile?.googleName ||
+          currentUser.displayName ||
+          inferNameFromEmail(currentUser.email)
+      ),
+      routeId: normalizeRouteId(currentUserProfile?.routeId),
       photoURL: downloadURL,
       photoStoragePath: storagePath,
       role: getCurrentUserRole(),
@@ -1348,8 +1737,8 @@ function subscribeToFriends() {
         currentUserProfile = null;
       }
 
-      renderFriendsPanel();
-      renderAuth();
+      void backfillVisibleProfiles(snapshot.docs);
+      renderAll();
     },
     (error) => {
       friendAccessIssue = isFirestorePermissionError(error);
@@ -1418,14 +1807,22 @@ function syncFolderSubscriptions() {
 
 function pruneItemsForTrip(tripId) {
   [...itemsByFolder.keys()].forEach((key) => {
-    if (key.startsWith(`${tripId}:`)) {
+    const [, cachedTripId] = String(key).split(":");
+
+    if (cachedTripId === tripId) {
       itemsByFolder.delete(key);
     }
   });
 }
 
 function pruneItemsForFolder(tripId, folderId) {
-  itemsByFolder.delete(buildFolderCacheKey(tripId, folderId));
+  [...itemsByFolder.keys()].forEach((key) => {
+    const [, cachedTripId, cachedFolderId] = String(key).split(":");
+
+    if (cachedTripId === tripId && cachedFolderId === folderId) {
+      itemsByFolder.delete(key);
+    }
+  });
 }
 
 async function ensureDefaultTrips() {
@@ -1517,14 +1914,21 @@ async function syncUserRecord(user) {
   const userSnapshot = await getDoc(userRef);
   const existingData = userSnapshot.exists() ? userSnapshot.data() : null;
   const role = resolveStoredUserRole(existingData?.role, user.email);
-  const displayName =
-    String(existingData?.displayName || "").trim() ||
-    String(user.displayName || "").trim() ||
-    inferNameFromEmail(user.email);
+  const displayName = hasOwnProperty(existingData, "displayName")
+    ? normalizeDisplayName(existingData?.displayName)
+    : "";
+  const googleName = normalizePersonName(
+    existingData?.googleName || user.displayName || inferNameFromEmail(user.email)
+  );
+  const routeId =
+    normalizeRouteId(existingData?.routeId) ||
+    (await ensureUniqueRouteId("", user.uid));
   const payload = {
     uid: user.uid,
     email: user.email || "",
     displayName,
+    googleName,
+    routeId,
     photoURL: String(existingData?.photoStoragePath ? existingData?.photoURL || "" : ""),
     photoStoragePath: String(existingData?.photoStoragePath || ""),
     role,
@@ -1545,10 +1949,199 @@ async function syncUserRecord(user) {
     uid: user.uid,
     email: user.email || "",
     displayName,
+    googleName,
+    routeId,
     photoURL: String(existingData?.photoStoragePath ? existingData?.photoURL || "" : ""),
     photoStoragePath: String(existingData?.photoStoragePath || ""),
     role,
   });
+}
+
+async function handleProfileDetailsSubmit(event) {
+  event.preventDefault();
+
+  if (!db || !currentUser?.uid || !currentUserProfile) {
+    authDetail.textContent = STRINGS.profile.signInRequired;
+    return;
+  }
+
+  const nextDisplayName = normalizeDisplayName(profileDisplayNameInput?.value);
+  const requestedRouteId = normalizeRouteId(profileRouteInput?.value);
+
+  if (!isValidRouteId(requestedRouteId)) {
+    authDetail.textContent = STRINGS.profile.routeInvalid;
+    return;
+  }
+
+  const routeId = await ensureUniqueRouteId(requestedRouteId, currentUser.uid);
+
+  if (routeId !== requestedRouteId) {
+    authDetail.textContent = STRINGS.profile.routeTaken;
+    return;
+  }
+
+  profileDetailsSubmit?.toggleAttribute("disabled", true);
+
+  try {
+    await setDoc(
+      doc(db, runtimeConfig.collections.users, currentUser.uid),
+      {
+        uid: currentUser.uid,
+        email: currentUser.email || "",
+        displayName: nextDisplayName,
+        googleName: normalizePersonName(
+          currentUserProfile.googleName ||
+            currentUser.displayName ||
+            inferNameFromEmail(currentUser.email)
+        ),
+        routeId,
+        photoURL: currentUserProfile.photoURL || "",
+        photoStoragePath: currentUserProfile.photoStoragePath || "",
+        role: getCurrentUserRole(),
+        isAdmin: isElevatedRole(getCurrentUserRole()),
+        updatedAt: serverTimestamp(),
+        updatedByUid: currentUser.uid,
+        updatedByEmail: currentUser.email || "",
+      },
+      { merge: true }
+    );
+
+    currentUserProfile = normalizeFriend({
+      ...currentUserProfile,
+      uid: currentUser.uid,
+      email: currentUser.email || "",
+      displayName: nextDisplayName,
+      googleName: normalizePersonName(
+        currentUserProfile.googleName ||
+          currentUser.displayName ||
+          inferNameFromEmail(currentUser.email)
+      ),
+      routeId,
+    });
+
+    authDetail.textContent = STRINGS.profile.saveDone;
+
+    window.setTimeout(() => {
+      const targetPath = buildProfilePath(routeId);
+
+      if (window.location.pathname === targetPath) {
+        window.location.reload();
+        return;
+      }
+
+      window.location.replace(targetPath);
+    }, 140);
+  } catch (error) {
+    authDetail.textContent = getErrorMessage(error, STRINGS.profile.saveFailed);
+    profileDetailsSubmit?.toggleAttribute("disabled", false);
+  }
+}
+
+async function ensureUniqueRouteId(preferredRouteId = "", excludeUid = "") {
+  const normalizedPreferredRouteId = normalizeRouteId(preferredRouteId);
+
+  if (
+    normalizedPreferredRouteId &&
+    !(await isRouteIdTaken(normalizedPreferredRouteId, excludeUid))
+  ) {
+    return normalizedPreferredRouteId;
+  }
+
+  const reservedRouteIds = new Set(
+    friends
+      .filter((friend) => friend.uid !== excludeUid)
+      .map((friend) => normalizeRouteId(friend.routeId))
+      .filter(Boolean)
+  );
+
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const nextRouteId = generateRandomRouteId();
+
+    if (reservedRouteIds.has(nextRouteId)) {
+      continue;
+    }
+
+    if (!(await isRouteIdTaken(nextRouteId, excludeUid))) {
+      return nextRouteId;
+    }
+  }
+
+  throw new Error("Could not generate a unique route ID.");
+}
+
+async function isRouteIdTaken(routeId, excludeUid = "") {
+  if (!db || !runtimeConfig?.collections?.users || !isValidRouteId(routeId)) {
+    return false;
+  }
+
+  const routeSnapshot = await getDocs(
+    query(
+      collection(db, runtimeConfig.collections.users),
+      where("routeId", "==", normalizeRouteId(routeId))
+    )
+  );
+
+  return routeSnapshot.docs.some((userDoc) => userDoc.id !== excludeUid);
+}
+
+function generateRandomRouteId() {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let routeId = "";
+
+  for (let index = 0; index < 3; index += 1) {
+    routeId += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  }
+
+  return routeId;
+}
+
+async function backfillVisibleProfiles(userDocs) {
+  if (!db || !currentUser?.uid || !isAdmin()) {
+    return;
+  }
+
+  const existingRouteIds = new Set(
+    userDocs
+      .map((userDoc) => normalizeRouteId(userDoc.data()?.routeId))
+      .filter(Boolean)
+  );
+  const batch = writeBatch(db);
+  let pendingWrites = 0;
+
+  for (const userDoc of userDocs) {
+    const data = userDoc.data() || {};
+    const updates = {};
+
+    if (!hasOwnProperty(data, "displayName")) {
+      updates.displayName = "";
+    }
+
+    if (!normalizePersonName(data.googleName)) {
+      updates.googleName = normalizePersonName(
+        data.displayName || inferNameFromEmail(data.email)
+      );
+    }
+
+    if (!normalizeRouteId(data.routeId)) {
+      let nextRouteId = "";
+
+      do {
+        nextRouteId = generateRandomRouteId();
+      } while (existingRouteIds.has(nextRouteId));
+
+      existingRouteIds.add(nextRouteId);
+      updates.routeId = nextRouteId;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      batch.set(userDoc.ref, updates, { merge: true });
+      pendingWrites += 1;
+    }
+  }
+
+  if (pendingWrites > 0) {
+    await batch.commit();
+  }
 }
 
 async function handleTripSubmit(event) {
@@ -1697,12 +2290,13 @@ async function handleUploadSubmit(event) {
   }
 
   const formData = new FormData(event.currentTarget);
-  const tripId = String(formData.get("tripId") || "");
-  const folderId = String(formData.get("folderId") || "");
+  const tripId = String(currentContributionContext?.tripId || "");
+  const folderId = String(currentContributionContext?.folderId || "");
   const files = Array.from(uploadFilesInput?.files || []);
   const description = String(formData.get("description") || "").trim();
   const trip = trips.find((item) => item.id === tripId);
   const folder = getFoldersForTrip(tripId).find((item) => item.id === folderId);
+  const authorMode = getSelectedAuthorMode(uploadAuthorModeSelect);
 
   if (!trip || !folder || files.length === 0) {
     return;
@@ -1733,7 +2327,7 @@ async function handleUploadSubmit(event) {
   }
 
   const uploadPromises = files.map((file, index) =>
-    uploadMediaFile(trip, folder, file, index, description)
+    uploadMediaFile(trip, folder, file, index, description, authorMode)
   );
 
   const results = await Promise.allSettled(uploadPromises);
@@ -1743,14 +2337,17 @@ async function handleUploadSubmit(event) {
   authDetail.textContent = STRINGS.uploads.summary(successCount, failureCount);
 
   event.currentTarget.reset();
+  resetContributeDialog();
   await loadSelectedFolderItems(tripId);
 }
 
-async function uploadMediaFile(trip, folder, file, index, description = "") {
+async function uploadMediaFile(trip, folder, file, index, description = "", authorMode) {
   const generatedName = buildStorageFileName(file, index);
-  const storagePath = `trips/${trip.slug}/${folder.slug}/${generatedName}`;
+  const ownerUid = String(currentUser?.uid || "member");
+  const storagePath = `trips/${trip.slug}/${folder.slug}/${ownerUid}/${generatedName}`;
   const ref = storageRef(storage, storagePath);
   const jobId = `${Date.now()}-${index}-${generatedName}`;
+  const authorship = buildAuthorshipFields(authorMode);
 
   pushUploadJob({
     id: jobId,
@@ -1761,6 +2358,12 @@ async function uploadMediaFile(trip, folder, file, index, description = "") {
 
   const task = uploadBytesResumable(ref, file, {
     contentType: file.type || "application/octet-stream",
+    customMetadata: {
+      createdByUid: String(currentUser?.uid || ""),
+      createdByEmail: String(currentUser?.email || ""),
+      tripId: String(trip.id || ""),
+      folderId: String(folder.id || ""),
+    },
   });
 
   await new Promise((resolve, reject) => {
@@ -1797,6 +2400,12 @@ async function uploadMediaFile(trip, folder, file, index, description = "") {
       const posterRef = storageRef(storage, posterStoragePath);
       const posterTask = uploadBytesResumable(posterRef, posterBlob, {
         contentType: "image/jpeg",
+        customMetadata: {
+          createdByUid: String(currentUser?.uid || ""),
+          createdByEmail: String(currentUser?.email || ""),
+          tripId: String(trip.id || ""),
+          folderId: String(folder.id || ""),
+        },
       });
 
       await new Promise((resolve, reject) => {
@@ -1832,7 +2441,14 @@ async function uploadMediaFile(trip, folder, file, index, description = "") {
     storagePath,
     posterDownloadURL,
     posterStoragePath,
-    authorLabel: getUploadAuthorLabel(),
+    authorLabel: authorship.authorLabel,
+    authorUid: authorship.authorUid,
+    authorRouteId: authorship.authorRouteId,
+    authorAliasMode: authorship.authorAliasMode,
+    authorDisplayName: authorship.authorDisplayName,
+    authorGoogleName: authorship.authorGoogleName,
+    tripId: trip.id,
+    folderId: folder.id,
     uploadedByUid: currentUser?.uid || "",
     uploadedByEmail: currentUser?.email || "",
     createdAt: serverTimestamp(),
@@ -1974,15 +2590,151 @@ function classifyMediaCategory(mimeType) {
   return "file";
 }
 
-function getUploadAuthorLabel() {
-  if (isAdmin()) {
-    return STRINGS.brand || "100GIGZ";
+function canChooseBrandAlias() {
+  return isAdmin();
+}
+
+function canChooseBrandAliasForItem(item = null) {
+  if (!canChooseBrandAlias()) {
+    return false;
+  }
+
+  if (!item) {
+    return true;
   }
 
   return (
-    String(currentUser?.displayName || "").trim() ||
-    String(currentUser?.email || "").split("@")[0] ||
-    STRINGS.members.unknown
+    isItemBrandAuthored(item) ||
+    item.createdByUid === currentUser?.uid ||
+    getItemAuthorUid(item) === currentUser?.uid
+  );
+}
+
+function syncAuthorModeField(selectElement, shellElement, selectedMode = AUTHOR_ALIAS_SELF) {
+  if (!selectElement || !shellElement) {
+    return;
+  }
+
+  const shouldShow = canChooseBrandAlias();
+  shellElement.classList.toggle("hidden", !shouldShow);
+
+  if (!shouldShow) {
+    selectElement.innerHTML = "";
+    return;
+  }
+
+  const selfLabel = getFriendLabel(
+    currentUserProfile ||
+      normalizeFriend({
+        uid: currentUser?.uid || "",
+        email: currentUser?.email || "",
+        googleName: currentUser?.displayName || "",
+        displayName: currentUserProfile?.displayName || "",
+      })
+  );
+
+  selectElement.innerHTML = `
+    <option value="${AUTHOR_ALIAS_BRAND}">${escapeHtml(STRINGS.uploads.aliasBrand)}</option>
+    <option value="${AUTHOR_ALIAS_SELF}">${escapeHtml(selfLabel || STRINGS.uploads.aliasSelf)}</option>
+  `;
+  selectElement.value =
+    selectedMode === AUTHOR_ALIAS_BRAND ? AUTHOR_ALIAS_BRAND : AUTHOR_ALIAS_SELF;
+}
+
+function getSelectedAuthorMode(selectElement) {
+  if (!canChooseBrandAlias()) {
+    return AUTHOR_ALIAS_SELF;
+  }
+
+  return selectElement?.value === AUTHOR_ALIAS_BRAND
+    ? AUTHOR_ALIAS_BRAND
+    : AUTHOR_ALIAS_SELF;
+}
+
+function buildAuthorshipFields(mode = AUTHOR_ALIAS_SELF) {
+  if (mode === AUTHOR_ALIAS_BRAND && canChooseBrandAlias()) {
+    return {
+      authorLabel: STRINGS.brand,
+      authorUid: "",
+      authorRouteId: "",
+      authorAliasMode: AUTHOR_ALIAS_BRAND,
+      authorDisplayName: "",
+      authorGoogleName: "",
+    };
+  }
+
+  const profile = currentUserProfile ||
+    normalizeFriend({
+      uid: currentUser?.uid || "",
+      email: currentUser?.email || "",
+      displayName: "",
+      googleName: currentUser?.displayName || inferNameFromEmail(currentUser?.email),
+      routeId: currentUserProfile?.routeId || "",
+    });
+
+  return {
+    authorLabel: getFriendLabel(profile),
+    authorUid: String(profile.uid || currentUser?.uid || ""),
+    authorRouteId: normalizeRouteId(profile.routeId),
+    authorAliasMode: AUTHOR_ALIAS_SELF,
+    authorDisplayName: normalizeDisplayName(profile.displayName),
+    authorGoogleName: getFriendGoogleName(profile),
+  };
+}
+
+function isBrandAuthorLabel(label) {
+  return String(label || "").trim().toUpperCase() === String(STRINGS.brand || "").trim().toUpperCase();
+}
+
+function getItemAuthorUid(item) {
+  if (item?.authorUid) {
+    return String(item.authorUid);
+  }
+
+  if (isItemBrandAuthored(item)) {
+    return "";
+  }
+
+  return String(item?.createdByUid || item?.uploadedByUid || "");
+}
+
+function isItemBrandAuthored(item) {
+  return (
+    item?.authorAliasMode === AUTHOR_ALIAS_BRAND ||
+    (!item?.authorUid && !item?.authorRouteId && isBrandAuthorLabel(item?.authorLabel))
+  );
+}
+
+function getItemAuthorRouteId(item) {
+  if (item?.authorRouteId) {
+    return normalizeRouteId(item.authorRouteId);
+  }
+
+  const friend = getFriendByUid(getItemAuthorUid(item));
+  return normalizeRouteId(friend?.routeId);
+}
+
+function resolveItemAuthorFriend(item) {
+  if (isItemBrandAuthored(item)) {
+    return null;
+  }
+
+  return getFriendByUid(getItemAuthorUid(item));
+}
+
+function isItemAuthoredByUser(item, friend) {
+  if (!friend?.uid || isItemBrandAuthored(item)) {
+    return false;
+  }
+
+  const authorUid = getItemAuthorUid(item);
+  if (authorUid) {
+    return authorUid === friend.uid;
+  }
+
+  return (
+    item?.createdByUid === friend.uid ||
+    item?.uploadedByUid === friend.uid
   );
 }
 
@@ -1996,15 +2748,20 @@ function resolveItemAuthorLabel(item) {
     return item.authorLabel;
   }
 
-  if (isAdminEmail(item.createdByEmail)) {
+  if (isItemBrandAuthored(item) || isAdminEmail(item.createdByEmail)) {
     return STRINGS.brand;
   }
 
-  return (
-    inferNameFromEmail(item.createdByEmail) ||
-    item.createdByUid ||
-    ""
-  );
+  if (item.authorUid) {
+    const authorFriend = getFriendByUid(item.authorUid);
+    return (
+      (authorFriend ? getFriendLabel(authorFriend) : "") ||
+      normalizeDisplayName(item.authorDisplayName) ||
+      normalizePersonName(item.authorGoogleName)
+    );
+  }
+
+  return inferNameFromEmail(item.createdByEmail) || item.createdByUid || "";
 }
 
 async function handleTextPostSubmit(event) {
@@ -2020,10 +2777,11 @@ async function handleTextPostSubmit(event) {
   }
 
   const formData = new FormData(event.currentTarget);
-  const tripId = String(formData.get("tripId") || "");
-  const folderId = String(formData.get("folderId") || "");
+  const tripId = String(currentContributionContext?.tripId || "");
+  const folderId = String(currentContributionContext?.folderId || "");
   const title = sanitizeUpper(formData.get("title"));
   const body = String(formData.get("body") || "").trim();
+  const authorship = buildAuthorshipFields(getSelectedAuthorMode(textAuthorModeSelect));
 
   if (!tripId || !folderId || !title || !body) {
     return;
@@ -2046,7 +2804,14 @@ async function handleTextPostSubmit(event) {
       body,
       name: `${slugifyFolder(title)}.txt`,
       mimeType: "text/plain",
-      authorLabel: getUploadAuthorLabel(),
+      authorLabel: authorship.authorLabel,
+      authorUid: authorship.authorUid,
+      authorRouteId: authorship.authorRouteId,
+      authorAliasMode: authorship.authorAliasMode,
+      authorDisplayName: authorship.authorDisplayName,
+      authorGoogleName: authorship.authorGoogleName,
+      tripId,
+      folderId,
       createdAt: serverTimestamp(),
       createdAtMs: Date.now(),
       createdByUid: currentUser?.uid || "",
@@ -2054,6 +2819,7 @@ async function handleTextPostSubmit(event) {
     });
 
     event.currentTarget.reset();
+    resetContributeDialog();
     await loadSelectedFolderItems(tripId);
   } catch (error) {
     authDetail.textContent = getErrorMessage(error, STRINGS.errors.textPostFailed);
@@ -2063,16 +2829,42 @@ async function handleTextPostSubmit(event) {
 async function handleEditTextPostSubmit(event) {
   event.preventDefault();
 
-  if (!db || !currentTextPostEdit) {
+  if (!db || !currentItemEdit) {
     return;
   }
 
   const formData = new FormData(event.currentTarget);
+  const isTextItem = currentItemEdit.kind === "text";
   const title = sanitizeUpper(formData.get("title"));
   const body = String(formData.get("body") || "").trim();
+  const description = String(formData.get("description") || "").trim();
+  const updates = {
+    updatedAt: serverTimestamp(),
+    updatedByUid: currentUser?.uid || "",
+    updatedByEmail: currentUser?.email || "",
+  };
 
-  if (!title || !body) {
-    return;
+  if (isTextItem) {
+    if (!title || !body) {
+      return;
+    }
+
+    Object.assign(updates, {
+      kind: "text",
+      title,
+      body,
+      name: `${slugifyFolder(title)}.txt`,
+      mimeType: "text/plain",
+    });
+  } else {
+    Object.assign(updates, {
+      kind: "file",
+      description,
+    });
+  }
+
+  if (canChooseBrandAliasForItem(currentItemEdit.item)) {
+    Object.assign(updates, buildAuthorshipFields(getSelectedAuthorMode(editPostAuthorModeSelect)));
   }
 
   try {
@@ -2080,79 +2872,124 @@ async function handleEditTextPostSubmit(event) {
       doc(
         db,
         runtimeConfig.collections.trips,
-        currentTextPostEdit.tripId,
+        currentItemEdit.tripId,
         "folders",
-        currentTextPostEdit.folderId,
+        currentItemEdit.folderId,
         "items",
-        currentTextPostEdit.itemId
+        currentItemEdit.itemId
       ),
-      {
-        kind: "text",
-        title,
-        body,
-        name: `${slugifyFolder(title)}.txt`,
-        mimeType: "text/plain",
-        authorLabel: currentTextPostEdit.authorLabel || getUploadAuthorLabel(),
-        createdByUid: currentTextPostEdit.createdByUid || currentUser?.uid || "",
-        createdByEmail: currentTextPostEdit.createdByEmail || currentUser?.email || "",
-        updatedAt: serverTimestamp(),
-        updatedByUid: currentUser?.uid || "",
-        updatedByEmail: currentUser?.email || "",
-      },
+      updates,
       { merge: true }
     );
 
-    const tripId = currentTextPostEdit.tripId;
+    const tripId = currentItemEdit.tripId;
+    const folderId = currentItemEdit.folderId;
     resetTextPostEditor();
-    await loadSelectedFolderItems(tripId);
+    await loadFolderItems(tripId, folderId);
+    renderAll();
   } catch (error) {
     authDetail.textContent = getErrorMessage(error, STRINGS.errors.textPostFailed);
   }
 }
 
-function beginTextPostEdit(tripId, folderId, item) {
-  if (!item || item.kind !== "text" || !canEditTextPost(item)) {
+function beginItemEdit(tripId, folderId, item) {
+  if (!item || !canEditItem(item)) {
     return;
   }
 
-  currentTextPostEdit = {
+  currentItemEdit = {
     tripId,
     folderId,
     itemId: item.id,
-    createdByUid: item.createdByUid,
-    createdByEmail: item.createdByEmail,
-    authorLabel: item.authorLabel || resolveItemAuthorLabel(item),
+    kind: item.kind,
+    item,
   };
+  currentTextPostEdit = currentItemEdit;
 
   const trip = trips.find((entry) => entry.id === tripId);
   const folder = getFoldersForTrip(tripId).find((entry) => entry.id === folderId);
+  const isTextItem = item.kind === "text";
+  const canPickAlias = canChooseBrandAliasForItem(item);
 
   if (editPostTitleInput) {
     editPostTitleInput.value = item.title || item.name || "";
+  }
+
+  if (editPostDescriptionInput) {
+    editPostDescriptionInput.value = item.description || "";
   }
 
   if (editPostBodyInput) {
     editPostBodyInput.value = item.bodyText || "";
   }
 
+  if (editPostFormTitle) {
+    editPostFormTitle.textContent = isTextItem ? STRINGS.admin.editTextPostTitle : "Edit Media";
+  }
+
   if (editPostContext) {
     editPostContext.textContent = buildFolderPathLabel(trip, folder);
   }
 
+  if (editPostFileName) {
+    editPostFileName.textContent = isTextItem
+      ? ""
+      : `FILE // ${getItemDisplayName(item)}`;
+    editPostFileName.classList.toggle("hidden", isTextItem);
+  }
+
+  editPostTitleShell?.classList.toggle("hidden", !isTextItem);
+  editPostBodyShell?.classList.toggle("hidden", !isTextItem);
+  editPostDescriptionShell?.classList.toggle("hidden", isTextItem);
+
+  if (editPostTitleInput) {
+    editPostTitleInput.required = isTextItem;
+  }
+
+  if (editPostBodyInput) {
+    editPostBodyInput.required = isTextItem;
+  }
+
+  if (editPostAliasShell) {
+    syncAuthorModeField(
+      editPostAuthorModeSelect,
+      editPostAliasShell,
+      isItemBrandAuthored(item) ? AUTHOR_ALIAS_BRAND : AUTHOR_ALIAS_SELF
+    );
+    editPostAliasShell.classList.toggle("hidden", !canPickAlias);
+  }
+
   setEditPostModalOpen(true);
   window.requestAnimationFrame(() => {
-    editPostTitleInput?.focus();
-    editPostTitleInput?.select();
+    if (isTextItem) {
+      editPostTitleInput?.focus();
+      editPostTitleInput?.select();
+      return;
+    }
+
+    editPostDescriptionInput?.focus();
+    editPostDescriptionInput?.select();
   });
 }
 
 function resetTextPostEditor() {
+  currentItemEdit = null;
   currentTextPostEdit = null;
   editPostForm?.reset();
 
   if (editPostContext) {
     editPostContext.textContent = "";
   }
+
+  if (editPostFileName) {
+    editPostFileName.textContent = "";
+    editPostFileName.classList.add("hidden");
+  }
+
+  editPostTitleShell?.classList.remove("hidden");
+  editPostBodyShell?.classList.remove("hidden");
+  editPostDescriptionShell?.classList.add("hidden");
+  editPostAliasShell?.classList.add("hidden");
 
   setEditPostModalOpen(false);
 }
@@ -2320,12 +3157,12 @@ async function handleMoveItemSubmit(event) {
   }
 }
 
-function openVideoPreview(tripId, folderId, itemId) {
+function openVideoPreview(tripId, folderId, itemId, view = "archive") {
   if (!videoPreviewPlayer || !tripId || !folderId || !itemId) {
     return;
   }
 
-  currentVideoPreviewContext = { tripId, folderId, itemId };
+  currentVideoPreviewContext = { tripId, folderId, itemId, view };
   const previewState = getCurrentVideoPreviewState();
 
   if (!previewState) {
@@ -2361,7 +3198,7 @@ function navigateVideoPreview(direction) {
     return;
   }
 
-  openVideoPreview(previewState.tripId, previewState.folderId, nextItem.id);
+  openVideoPreview(previewState.tripId, previewState.folderId, nextItem.id, previewState.view);
 }
 
 function resetVideoPreview() {
@@ -2382,8 +3219,8 @@ function getCurrentVideoPreviewState() {
     return null;
   }
 
-  const { tripId, folderId, itemId } = currentVideoPreviewContext;
-  const items = getFolderVideoItems(tripId, folderId);
+  const { tripId, folderId, itemId, view } = currentVideoPreviewContext;
+  const items = getFolderVideoItems(tripId, folderId, view);
   const currentIndex = items.findIndex((item) => item.id === itemId);
 
   if (currentIndex === -1) {
@@ -2394,16 +3231,25 @@ function getCurrentVideoPreviewState() {
     tripId,
     folderId,
     itemId,
+    view,
     items,
     currentIndex,
     currentItem: items[currentIndex],
   };
 }
 
-function getFolderVideoItems(tripId, folderId) {
-  return getSortedItemsForFolder(tripId, folderId, getItemSortMode(tripId, folderId)).filter(
-    (item) => item.kind === "file" && item.mimeType.startsWith("video/")
-  );
+function getFolderVideoItems(tripId, folderId, view = "archive") {
+  const profileView = getActiveProfileView();
+  const items = view === "profile" && profileView?.friend
+    ? getProfileItemsForFolder(
+        profileView.friend,
+        tripId,
+        folderId,
+        getItemSortMode(tripId, folderId, view)
+      )
+    : getSortedItemsForFolder(tripId, folderId, getItemSortMode(tripId, folderId, view));
+
+  return items.filter((item) => item.kind === "file" && item.mimeType.startsWith("video/"));
 }
 
 function syncVideoPreviewNavigation(previewState = getCurrentVideoPreviewState()) {
@@ -2438,12 +3284,34 @@ function isCurrentUserTextOwner(item) {
   return isCurrentUserItemOwner(item);
 }
 
+function canEditItem(item) {
+  return Boolean(
+    item?.id &&
+      currentUser?.uid &&
+      (isAdminViewEnabled() || isCurrentUserItemOwner(item))
+  );
+}
+
 function canEditTextPost(item) {
   return Boolean(
-    item?.kind === "text" &&
-      currentUser?.uid &&
-      (isAdminViewEnabled() || isCurrentUserTextOwner(item))
+    item?.kind === "text" && canEditItem(item)
   );
+}
+
+function canDeleteItem(item) {
+  if (!item?.id || !currentUser?.uid) {
+    return false;
+  }
+
+  if (isAdminViewEnabled()) {
+    return true;
+  }
+
+  if (item.kind === "text") {
+    return isCurrentUserItemOwner(item);
+  }
+
+  return isCurrentUserItemOwner(item) && doesStoragePathBelongToCurrentUser(item?.storagePath);
 }
 
 function hasAlternativeFolderForItemMove(tripId, folderId) {
@@ -2459,7 +3327,7 @@ function canMoveItem(item, tripId, folderId) {
     item?.id &&
       currentUser?.uid &&
       hasAlternativeFolderForItemMove(tripId, folderId) &&
-      (isAdmin() || isCurrentUserItemOwner(item))
+      (isAdminViewEnabled() || isCurrentUserItemOwner(item))
   );
 }
 
@@ -2516,6 +3384,19 @@ async function handleRoleSelectChange(event) {
 }
 
 function handleTripBrowserClick(event) {
+  const textPreviewTrigger = event.target.closest("[data-action='preview-text']");
+
+  if (textPreviewTrigger) {
+    const tripId = String(textPreviewTrigger.getAttribute("data-trip-id") || "");
+    const folderId = String(textPreviewTrigger.getAttribute("data-folder-id") || "");
+    const itemId = String(textPreviewTrigger.getAttribute("data-item-id") || "");
+
+    if (tripId && folderId && itemId) {
+      openTextPreview(tripId, folderId, itemId);
+    }
+    return;
+  }
+
   const videoPreviewTrigger = event.target.closest("[data-action='preview-video']");
 
   if (videoPreviewTrigger) {
@@ -2572,23 +3453,34 @@ function handleTripBrowserClick(event) {
     return;
   }
 
+  const contributeTrigger = event.target.closest("[data-action='open-contribute']");
+
+  if (contributeTrigger) {
+    const tripId = String(contributeTrigger.getAttribute("data-trip-id") || "");
+    const folderId = String(contributeTrigger.getAttribute("data-folder-id") || "");
+
+    if (tripId && folderId) {
+      beginContribution(tripId, folderId);
+    }
+    return;
+  }
+
   const trigger = event.target.closest("[data-action='select-folder']");
 
   if (!trigger) {
     return;
   }
 
-  const tripId = trigger.getAttribute("data-trip-id");
-  const folderId = trigger.getAttribute("data-folder-id");
+  const tripId = String(trigger.getAttribute("data-trip-id") || "");
+  const folderId = String(trigger.getAttribute("data-folder-id") || "");
+  const view = String(trigger.getAttribute("data-view") || "archive");
 
   if (!tripId || !folderId) {
     return;
   }
 
-  selectedFolders.set(tripId, folderId);
-  renderTrips();
-  renderAdminSelects();
-  loadSelectedFolderItems(tripId);
+  setSelectedFolderId(tripId, folderId, view);
+  renderAll();
 }
 
 function handleTripToggleClick(trigger) {
@@ -2603,6 +3495,7 @@ function handleTripToggleClick(trigger) {
 }
 
 function handleVideoPreviewClick(trigger) {
+  const view = String(trigger.getAttribute("data-view") || "archive");
   const tripId = String(trigger.getAttribute("data-trip-id") || "");
   const folderId = String(trigger.getAttribute("data-folder-id") || "");
   const itemId = String(trigger.getAttribute("data-item-id") || "");
@@ -2611,7 +3504,7 @@ function handleVideoPreviewClick(trigger) {
     return;
   }
 
-  openVideoPreview(tripId, folderId, itemId);
+  openVideoPreview(tripId, folderId, itemId, view);
 }
 
 function handleTripBrowserChange(event) {
@@ -2622,15 +3515,16 @@ function handleTripBrowserChange(event) {
   }
 
   const tripId = String(sortSelect.getAttribute("data-trip-id") || "");
-  const folderId = getSelectedFolderId(tripId);
+  const view = String(sortSelect.getAttribute("data-view") || "archive");
+  const folderId = getSelectedFolderId(tripId, view);
   const sortMode = normalizeItemSortMode(sortSelect.value);
 
   if (!tripId || !folderId) {
     return;
   }
 
-  itemSortPreferences.set(buildFolderCacheKey(tripId, folderId), sortMode);
-  renderTrips();
+  itemSortPreferences.set(buildFolderCacheKey(tripId, folderId, view), sortMode);
+  renderAll();
 }
 
 function handleItemEditClick(trigger) {
@@ -2643,7 +3537,7 @@ function handleItemEditClick(trigger) {
     return;
   }
 
-  beginTextPostEdit(tripId, folderId, item);
+  beginItemEdit(tripId, folderId, item);
 }
 
 function handleItemMoveClick(trigger) {
@@ -2937,7 +3831,7 @@ async function deleteStoragePrefix(prefixRef) {
 }
 
 async function handleItemDeleteClick(trigger) {
-  if (!db || !isAdminViewEnabled()) {
+  if (!db) {
     return;
   }
 
@@ -2947,7 +3841,7 @@ async function handleItemDeleteClick(trigger) {
   const items = getItemsForFolder(tripId, folderId);
   const item = items.find((entry) => entry.id === itemId);
 
-  if (!tripId || !folderId || !itemId || !item) {
+  if (!tripId || !folderId || !itemId || !item || !canDeleteItem(item)) {
     return;
   }
 
@@ -2998,7 +3892,17 @@ async function handleItemDeleteClick(trigger) {
     authDetail.textContent = STRINGS.items.itemRemoved(
       getItemDisplayName(item) || "ITEM"
     );
-    await loadSelectedFolderItems(tripId);
+
+    if (
+      currentTextPreviewContext?.tripId === tripId &&
+      currentTextPreviewContext.folderId === folderId &&
+      currentTextPreviewContext.itemId === itemId
+    ) {
+      resetTextPreview();
+    }
+
+    await loadFolderItems(tripId, folderId);
+    renderAll();
   } catch (error) {
     authDetail.textContent = getErrorMessage(error, STRINGS.errors.itemDeleteFailed);
     trigger.disabled = false;
@@ -3049,6 +3953,7 @@ function renderAll() {
   syncResponsivePanels();
   renderFeaturedMessage();
   renderAuth();
+  renderRouteChrome();
   renderCurrentPage();
   renderTripCount();
   renderTrips();
@@ -3067,12 +3972,12 @@ function renderAuth() {
 
   if (desktopRouteToggleLink) {
     desktopRouteToggleLink.textContent =
-      currentRoute === ROUTE_PROFILE ? STRINGS.auth.archive : STRINGS.auth.profile;
+      isProfileRoute() ? STRINGS.auth.archive : STRINGS.auth.profile;
   }
 
   if (bannerRouteToggleLink) {
     bannerRouteToggleLink.textContent =
-      currentRoute === ROUTE_PROFILE ? STRINGS.auth.archive : STRINGS.auth.profile;
+      isProfileRoute() ? STRINGS.auth.archive : STRINGS.auth.profile;
   }
 
   setElementVisible(desktopRouteToggleLink, hasArchiveAccess, "inline-flex");
@@ -3082,7 +3987,7 @@ function renderAuth() {
     authStatus.textContent = STRINGS.auth.civilianView;
     authDetail.textContent = STRINGS.auth.loading;
     setSignOutButtonsVisible(false);
-    contributePanel?.classList.add("hidden");
+    uploadQueuePanel?.classList.add("hidden");
     adminPanel?.classList.add("hidden");
     setGoogleButtonVisible(false);
     return;
@@ -3092,7 +3997,7 @@ function renderAuth() {
     authStatus.textContent = STRINGS.auth.civilianView;
     authDetail.textContent = STRINGS.auth.configMissing;
     setSignOutButtonsVisible(false);
-    contributePanel?.classList.add("hidden");
+    uploadQueuePanel?.classList.add("hidden");
     adminPanel?.classList.add("hidden");
     setGoogleButtonVisible(false);
     return;
@@ -3102,7 +4007,7 @@ function renderAuth() {
     authStatus.textContent = STRINGS.auth.civilianView;
     authDetail.textContent = firestoreAccessIssue ? STRINGS.auth.rulesBlocked : "";
     setSignOutButtonsVisible(false);
-    contributePanel?.classList.add("hidden");
+    uploadQueuePanel?.classList.add("hidden");
     adminPanel?.classList.add("hidden");
     setGoogleButtonVisible(true);
     return;
@@ -3125,7 +4030,7 @@ function renderAuth() {
 }
 
 function renderCurrentPage() {
-  const showProfile = currentRoute === ROUTE_PROFILE && Boolean(currentUser?.uid);
+  const showProfile = isProfileRoute();
 
   archivePage?.classList.toggle("hidden", showProfile);
   profilePage?.classList.toggle("hidden", !showProfile);
@@ -3143,46 +4048,26 @@ function syncControlPanelVisibility() {
   const signedIn = canUploadMedia();
   const adminMode = signedIn && isAdminViewEnabled();
 
-  contributePanel?.classList.toggle("hidden", !signedIn || currentRoute !== ROUTE_ARCHIVE);
-  adminPanel?.classList.toggle("hidden", !adminMode || currentRoute !== ROUTE_ARCHIVE);
+  adminPanel?.classList.toggle("hidden", !adminMode || isProfileRoute());
   featuredMessageForm?.classList.toggle("hidden", !adminMode);
   tripForm?.classList.toggle("hidden", !adminMode);
   folderForm?.classList.toggle("hidden", !adminMode);
-  textPostForm?.classList.toggle("hidden", !signedIn);
+  syncAuthorModeField(uploadAuthorModeSelect, uploadAuthorModeShell);
+  syncAuthorModeField(textAuthorModeSelect, textAuthorModeShell);
+  syncUploadQueueVisibility();
 }
 
 function renderProfilePage() {
-  const signedIn = Boolean(currentUser?.uid);
-
-  if (profileImagePreview) {
-    profileImagePreview.src = getFriendPhotoUrl(currentUserProfile);
-  }
-
-  if (profileNameDisplay) {
-    profileNameDisplay.textContent = signedIn
-      ? sanitizeUpper(getFriendLabel(currentUserProfile || normalizeFriend({
-          uid: currentUser?.uid || "",
-          email: currentUser?.email || "",
-          displayName: currentUser?.displayName || "",
-          photoURL: "",
-          role: getCurrentUserRole(),
-        })))
-      : STRINGS.profile.signInRequired;
-  }
-
-  if (profileEmailDisplay) {
-    profileEmailDisplay.textContent = signedIn ? String(currentUser?.email || "") : "";
-  }
-
-  if (profileImageForm) {
-    profileImageForm.classList.toggle("hidden", !signedIn);
-  }
+  renderResolvedProfilePage(getActiveProfileView());
 }
 
 function renderTrips() {
   if (!tripList) {
     return;
   }
+
+  tripList.innerHTML = renderTripSections({ view: "archive" });
+  return;
 
   const adminMode = isAdminViewEnabled();
 
@@ -3214,7 +4099,7 @@ function renderTrips() {
         ? "border border-white/10  bg-white/[0.02]"
         : "border border-white/10 bg-white/[0.02]";
       const tripHeaderClass = expanded
-        ? "flex flex-col gap-3 border-b border-cyan-100/10 bg-[linear-gradient(to_right,rgba(0, 45, 66, 0.04),rgba(255,255,255,0.008)_42%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
+        ? "flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.08),rgba(255,255,255,0.008)_42%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
         : "flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5";
       const tripContentClass = expanded
         ? "grid gap-5 bg-[linear-gradient(to_bottom,rgba(88, 88, 88, 0.25),rgba(15, 15, 15, 0.01))] p-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-5"
@@ -3387,6 +4272,480 @@ function renderTrips() {
     .join("");
 }
 
+function renderRouteChrome() {
+  const profileView = getActiveProfileView();
+  const isProfileMode = isProfileRoute();
+  const routeContextLabel = buildRouteContextLabel(profileView);
+
+  if (siteShell) {
+    siteShell.dataset.page = isProfileMode ? "profile" : "archive";
+  }
+
+  if (scrollBanner) {
+    scrollBanner.dataset.page = isProfileMode ? "profile" : "archive";
+  }
+
+  if (headerRouteContext) {
+    headerRouteContext.textContent = routeContextLabel;
+    headerRouteContext.classList.toggle("hidden", !isProfileMode);
+  }
+
+  if (scrollBannerContext) {
+    scrollBannerContext.textContent = routeContextLabel;
+    scrollBannerContext.classList.toggle("hidden", !isProfileMode);
+  }
+}
+
+function buildRouteContextLabel(profileView) {
+  if (!isProfileRoute()) {
+    return "";
+  }
+
+  if (profileView?.friend) {
+    return `PROFILE // ${getFriendLabel(profileView.friend)} #${profileView.friend.routeId || "---"}`;
+  }
+
+  if (profileView?.state === "signin-required") {
+    return "PROFILE // SIGN IN REQUIRED";
+  }
+
+  if (profileView?.state === "not-found") {
+    return "PROFILE // 404";
+  }
+
+  return "PROFILE // LOADING";
+}
+
+function getActiveProfileView() {
+  if (!isProfileRoute()) {
+    return { state: "archive" };
+  }
+
+  if (currentRoute.kind === ROUTE_PROFILE_SELF) {
+    if (!currentUser?.uid) {
+      return { state: "signin-required" };
+    }
+
+    const selfProfile =
+      currentUserProfile ||
+      normalizeFriend({
+        uid: currentUser.uid,
+        email: currentUser.email || "",
+        displayName: "",
+        googleName: currentUser.displayName || inferNameFromEmail(currentUser.email),
+        routeId: currentUserProfile?.routeId || "",
+      });
+
+    return {
+      state: "ready",
+      friend: selfProfile,
+      isSelf: true,
+    };
+  }
+
+  if (currentRoute.kind === ROUTE_PROFILE_PUBLIC) {
+    const matchedFriend = getFriendByRouteId(currentRoute.routeId);
+
+    if (matchedFriend) {
+      return {
+        state: "ready",
+        friend: matchedFriend,
+        isSelf: matchedFriend.uid === currentUser?.uid,
+      };
+    }
+
+    if (!friendAccessIssue && friends.length === 0) {
+      return {
+        state: "loading",
+        routeId: currentRoute.routeId,
+      };
+    }
+
+    return {
+      state: "not-found",
+      routeId: currentRoute.routeId,
+    };
+  }
+
+  return {
+    state: "not-found",
+  };
+}
+
+function renderResolvedProfilePage(profileView) {
+  const friend = profileView?.friend || null;
+  const isReady = profileView?.state === "ready" && friend;
+  const isSelf = Boolean(isReady && friend.uid && friend.uid === currentUser?.uid);
+  const authoredCount = isReady ? countAuthoredItemsForUser(friend) : 0;
+  const tripMarkup = isReady
+    ? renderTripSections({ view: "profile", profileFriend: friend })
+    : "";
+  const hasAuthoredContent = Boolean(tripMarkup.trim());
+
+  if (profilePageTitle) {
+    profilePageTitle.textContent = STRINGS.profile.title;
+  }
+
+  if (profilePageSubtitle) {
+    profilePageSubtitle.textContent = isReady
+      ? `${getFriendLabel(friend)} #${friend.routeId || "---"}`
+      : profileView?.state === "signin-required"
+        ? STRINGS.profile.signInRequired
+        : profileView?.state === "not-found"
+          ? STRINGS.profile.notFound
+          : STRINGS.profile.loading;
+  }
+
+  if (profilePageHelper) {
+    profilePageHelper.textContent = isSelf
+      ? "Your public profile and authored uploads."
+      : STRINGS.profile.helper;
+  }
+
+  if (profilePageStatus) {
+    profilePageStatus.textContent = isReady
+      ? isSelf
+        ? "MANAGE MODE"
+        : "PUBLIC VIEW"
+      : profileView?.state === "not-found"
+        ? "404"
+        : "";
+  }
+
+  if (profileImagePreview) {
+    profileImagePreview.src = getFriendPhotoUrl(friend);
+  }
+
+  if (profileNameDisplay) {
+    profileNameDisplay.textContent = isReady ? getFriendLabel(friend) : "";
+  }
+
+  if (profileRouteDisplay) {
+    profileRouteDisplay.textContent = isReady && friend.routeId ? `#${friend.routeId}` : "";
+  }
+
+  if (profileGoogleNameDisplay) {
+    profileGoogleNameDisplay.textContent = isReady ? getFriendSecondaryLabel(friend) : "";
+  }
+
+  if (profilePostCountDisplay) {
+    profilePostCountDisplay.textContent = isReady
+      ? buildMemberPostCountLabel(authoredCount)
+      : "";
+  }
+
+  if (profileImageForm) {
+    profileImageForm.classList.toggle("hidden", !isSelf);
+  }
+
+  if (profileDetailsForm) {
+    profileDetailsForm.classList.toggle("hidden", !isSelf);
+  }
+
+  if (profileDisplayNameInput && isSelf) {
+    profileDisplayNameInput.value = friend.displayName || "";
+  }
+
+  if (profileRouteInput && isSelf) {
+    profileRouteInput.value = friend.routeId || "";
+  }
+
+  if (profileTripList) {
+    profileTripList.innerHTML = tripMarkup;
+  }
+
+  if (profileEmptyState) {
+    const message = !isReady
+      ? profileView?.state === "not-found"
+        ? STRINGS.profile.notFound
+        : profileView?.state === "signin-required"
+          ? STRINGS.profile.signInRequired
+          : STRINGS.profile.loading
+      : hasAuthoredContent
+        ? ""
+        : STRINGS.profile.empty;
+    profileEmptyState.textContent = message;
+    profileEmptyState.classList.toggle("hidden", !message);
+  }
+}
+
+function renderTripSections({ view = "archive", profileFriend = null } = {}) {
+  if (trips.length === 0) {
+    return `
+      <section class="border border-white/10 bg-white/[0.02] p-5">
+        <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-sm uppercase tracking-[0.2em] text-stone-300/60">
+          ${escapeHtml(STRINGS.trips.noTrips)}
+        </p>
+      </section>
+    `;
+  }
+
+  const sections = trips
+    .map((trip, index) => renderTripSection(trip, index, { view, profileFriend }))
+    .filter(Boolean)
+    .join("");
+
+  return sections;
+}
+
+function renderTripSection(trip, index, { view = "archive", profileFriend = null } = {}) {
+  const isProfileView = view === "profile";
+  const adminMode = !isProfileView && isAdminViewEnabled();
+  const adminContextButtonClass = "shrink-0 border border-amber-300/32 bg-amber-100/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08] disabled:cursor-not-allowed disabled:opacity-40";
+  const adminFolderButtonClass = "border border-amber-300/32 bg-amber-100/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]";
+  const folders = isProfileView
+    ? getProfileFoldersForTrip(profileFriend, trip.id)
+    : getFoldersForTrip(trip.id);
+
+  if (folders.length === 0) {
+    return "";
+  }
+
+  const selectedFolderId = getSelectedFolderId(trip.id, view, folders);
+  const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) || folders[0];
+  const activeFolderId = selectedFolder?.id || "";
+  const sortMode = getItemSortMode(trip.id, activeFolderId, view);
+  const items = isProfileView
+    ? getProfileItemsForFolder(profileFriend, trip.id, activeFolderId, sortMode)
+    : getSortedItemsForFolder(trip.id, activeFolderId, sortMode);
+  const expanded = isProfileView ? true : isTripExpanded(trip.id);
+  const pathLabel = buildFolderPathLabel(trip, selectedFolder);
+  const tripToggleLabel = expanded ? STRINGS.trips.collapseTrip : STRINGS.trips.expandTrip;
+  const shellClass = isProfileView
+    ? "border border-white/12 bg-[linear-gradient(to_bottom,rgba(38,38,38,0.18),rgba(255,255,255,0.02)_40%,rgba(0,0,0,0.1))]"
+    : "border border-white/10 bg-white/[0.02]";
+  const headerClass = isProfileView
+    ? "flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.18),rgba(255,255,255,0.01)_46%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
+    : expanded
+      ? "flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.08),rgba(255,255,255,0.008)_42%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
+      : "flex flex-col gap-3 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5";
+  const contentClass = expanded
+    ? "grid gap-5 p-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-5"
+    : "hidden gap-5 p-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:p-5";
+  const contributeMarkup =
+    !isProfileView && canUploadMedia() && selectedFolder
+      ? `
+        <button
+          type="button"
+          data-action="open-contribute"
+          data-trip-id="${escapeHtml(trip.id)}"
+          data-folder-id="${escapeHtml(selectedFolder.id)}"
+          class="inline-flex items-center justify-center whitespace-nowrap border border-white/10 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08]"
+          aria-label="Add to ${escapeHtml(pathLabel)}"
+        >
+          + ADD
+        </button>
+      `
+      : "";
+
+  return `
+    <section class="${shellClass}">
+      <div class="${headerClass}">
+        <div class="space-y-2">
+          <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] ${isProfileView ? "text-stone-200/72" : "text-stone-300/55"}">${String(
+            getTripSequenceNumber(trip, index)
+          ).padStart(4, "0")}</p>
+          <h2 class="text-2xl uppercase tracking-[0.18em] text-stone-100 sm:text-3xl">${escapeHtml(`${trip.slug}/`)}</h2>
+          <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs uppercase tracking-[0.18em] ${isProfileView ? "text-stone-300/60" : "text-stone-300/60"}">${escapeHtml(trip.label)}</p>
+        </div>
+        <div class="max-w-full overflow-x-auto">
+          <div class="flex w-max items-center gap-3 pr-1">
+            ${
+              isProfileView
+                ? `<div class="shrink-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-300/68">AUTHORED TRIP</div>`
+                : `
+                  <button
+                    type="button"
+                    data-action="toggle-trip"
+                    data-trip-id="${escapeHtml(trip.id)}"
+                    aria-expanded="${expanded ? "true" : "false"}"
+                    class="border border-white/10 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]"
+                  >
+                    ${tripToggleLabel}
+                  </button>
+                `
+            }
+            <div class="shrink-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.2em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"}">
+              ${padCount(folders.length, STRINGS.trips.foldersLabel)}
+            </div>
+            ${
+              adminMode
+                ? `
+                  <button
+                    type="button"
+                    data-action="move-trip"
+                    data-direction="up"
+                    data-trip-id="${escapeHtml(trip.id)}"
+                    class="${adminContextButtonClass}"
+                    ${index === 0 ? "disabled" : ""}
+                  >
+                    ${STRINGS.trips.moveTripUp}
+                  </button>
+                  <button
+                    type="button"
+                    data-action="move-trip"
+                    data-direction="down"
+                    data-trip-id="${escapeHtml(trip.id)}"
+                    class="${adminContextButtonClass}"
+                    ${index === trips.length - 1 ? "disabled" : ""}
+                  >
+                    ${STRINGS.trips.moveTripDown}
+                  </button>
+                  <button
+                    type="button"
+                    data-action="delete-trip"
+                    data-trip-id="${escapeHtml(trip.id)}"
+                    class="${adminContextButtonClass}"
+                  >
+                    ${STRINGS.trips.deleteTrip}
+                  </button>
+                `
+                : ""
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="${contentClass}">
+        <aside class="border ${isProfileView ? "border-white/10 bg-black/30" : "border-white/10 bg-black/25"} p-4">
+          <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.24em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/65"}">
+            Folders
+          </p>
+          <div class="mt-4 flex flex-col gap-2">
+            ${renderTripFolderButtons(trip, folders, selectedFolderId, view, profileFriend)}
+          </div>
+        </aside>
+
+        <div class="min-w-0 border ${isProfileView ? "border-white/10 bg-black/28" : "border-white/10 bg-black/20"} p-4 lg:p-5">
+          <div class="flex flex-col gap-3 border-b ${isProfileView ? "border-white/10" : "border-white/10"} pb-4">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"}">Active Folder</p>
+                <p class="mt-2 text-lg uppercase tracking-[0.16em] text-stone-100 sm:text-xl">${escapeHtml(pathLabel)}</p>
+              </div>
+              <div class="flex flex-col gap-3 lg:items-end">
+                <div class="flex flex-wrap items-center justify-end gap-3">
+                  <label class="flex items-center gap-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/62"}">
+                    <span>${STRINGS.items.sortLabel}</span>
+                    <select
+                      data-action="sort-items"
+                      data-view="${escapeHtml(view)}"
+                      data-trip-id="${escapeHtml(trip.id)}"
+                      class="border ${isProfileView ? "border-white/12 bg-white/[0.03]" : "border-white/10 bg-black/45"} px-2 py-2 text-[0.62rem] uppercase tracking-[0.16em] text-stone-200 outline-none transition focus:border-white/30"
+                    >
+                      ${renderItemSortOptions(sortMode)}
+                    </select>
+                  </label>
+                  ${
+                    adminMode && selectedFolder
+                      ? `
+                        <button
+                          type="button"
+                          data-action="delete-folder"
+                          data-trip-id="${escapeHtml(trip.id)}"
+                          data-folder-id="${escapeHtml(selectedFolder.id)}"
+                          class="${adminFolderButtonClass}"
+                        >
+                          Delete Folder
+                        </button>
+                      `
+                      : ""
+                  }
+                  ${contributeMarkup}
+                </div>
+                <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.2em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/60"}">
+                  ${isProfileView ? buildMemberPostCountLabel(items.length) : padCount(items.length, STRINGS.trips.objectsLabel)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 max-w-full overflow-hidden rounded-sm border ${isProfileView ? "border-white/10" : "border-white/8"} bg-black/18">
+            <div class="relative max-h-[68vh] max-w-full overflow-x-auto overflow-y-auto overscroll-x-contain xl:max-h-[75vh]">
+              <table class="w-max min-w-[42rem] border-collapse font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs tracking-[0.1em] text-stone-200/85 xl:min-w-full">
+                <thead class="bg-white/[0.02] text-stone-300/55 uppercase">
+                  <tr>
+                    <th class="sticky top-0 z-10 min-w-[8.5rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.previewColumn}</th>
+                    <th class="sticky top-0 z-10 min-w-[10rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.nameColumn}</th>
+                    <th class="sticky top-0 z-10 w-24 min-w-[5.5rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.typeColumn}</th>
+                    <th class="sticky top-0 z-10 min-w-[8rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.authorColumn}</th>
+                    <th class="sticky top-0 z-10 min-w-[12rem] border-b border-white/10 bg-neutral-950 px-3 py-3 text-left font-normal shadow-[0_1px_0_rgba(255,255,255,0.05)]">${STRINGS.items.metaColumn}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${renderItemRows(items, trip.id, activeFolderId, view)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderTripFolderButtons(trip, folders, selectedFolderId, view = "archive", profileFriend = null) {
+  return folders
+    .map((folder) => {
+      const isSelected = folder.id === selectedFolderId;
+      const folderItems = view === "profile"
+        ? getProfileItemsForFolder(profileFriend, trip.id, folder.id)
+        : getItemsForFolder(trip.id, folder.id);
+
+      return `
+        <button
+          type="button"
+          data-action="select-folder"
+          data-view="${escapeHtml(view)}"
+          data-trip-id="${escapeHtml(trip.id)}"
+          data-folder-id="${escapeHtml(folder.id)}"
+          class="flex items-center gap-2 border px-3 py-3 text-left transition ${
+            isSelected
+              ? "border-stone-100 bg-white/[0.08] text-stone-100"
+              : "border-white/10 bg-black/20 text-stone-200 hover:border-white/28 hover:bg-white/[0.04]"
+          }"
+        >
+          <span class="text-sm uppercase tracking-[0.14em]">${escapeHtml(buildFolderButtonLabel(trip, folder))}</span>
+          <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] tracking-[0.16em] text-stone-400/72">${escapeHtml(String(folderItems.length))}</span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function getProfileFoldersForTrip(friend, tripId) {
+  return getFoldersForTrip(tripId).filter(
+    (folder) => getProfileItemsForFolder(friend, tripId, folder.id).length > 0
+  );
+}
+
+function getProfileItemsForFolder(friend, tripId, folderId, sortMode = ITEM_SORT_MEDIA_DATE_ASC) {
+  const items = getItemsForFolder(tripId, folderId).filter((item) =>
+    isItemAuthoredByUser(item, friend)
+  );
+
+  return [...items].sort((left, right) => compareItems(left, right, sortMode));
+}
+
+function countAuthoredItemsForUser(friend) {
+  let count = 0;
+
+  itemsByFolder.forEach((folderItems) => {
+    folderItems.forEach((item) => {
+      if (isItemAuthoredByUser(item, friend)) {
+        count += 1;
+      }
+    });
+  });
+
+  return count;
+}
+
+function buildMemberPostCountLabel(count) {
+  const total = Number(count || 0);
+  return total === 1 ? "1 POST" : `${total} POSTS`;
+}
+
 function getItemDisplayName(item) {
   if (item?.kind === "text") {
     return String(item?.title || item?.name || "UNTITLED");
@@ -3403,7 +4762,7 @@ function getItemDisplayName(item) {
   return cleanedName || storedName || "untitled";
 }
 
-function renderItemRows(items, tripId, folderId) {
+function renderItemRows(items, tripId, folderId, view = "archive") {
   if (items.length === 0) {
     return `
       <tr class="text-stone-300/45 uppercase">
@@ -3423,19 +4782,19 @@ function renderItemRows(items, tripId, folderId) {
         item.kind === "text"
           ? STRINGS.items.post
           : item.extension || simplifyMimeType(item.mimeType) || "FILE";
-      const preview = renderItemPreview(item, tripId, folderId);
+      const preview = renderItemPreview(item, tripId, folderId, view);
       const author = renderItemAuthor(item);
       const meta = renderItemMeta(item, tripId, folderId);
       const nameMarkup =
         item.kind === "text"
           ? `<div class="text-stone-100">${escapeHtml(item.title || item.name)}</div>`
-          : `<a class="text-sky-300 underline-offset-4 hover:underline" href="${escapeHtml(
+          : `<a class="text-stone-100 underline-offset-4 hover:text-white hover:underline" href="${escapeHtml(
               item.downloadURL
             )}" target="_blank" rel="noreferrer">${escapeHtml(displayName)}</a>`;
 
       return `
         <tr class="align-top transition hover:bg-white/[0.03]">
-          <td class="min-w-[18rem] border-b border-white/8 px-3 py-4">${preview}</td>
+          <td class="min-w-[8.5rem] border-b border-white/8 px-3 py-4">${preview}</td>
           <td class="min-w-[10rem] border-b border-white/8 px-3 py-4">${nameMarkup}</td>
           <td class="w-24 min-w-[5.5rem] border-b border-white/8 px-3 py-4 uppercase text-stone-300/72">${escapeHtml(
             typeLabel
@@ -3449,6 +4808,11 @@ function renderItemRows(items, tripId, folderId) {
 }
 
 function renderItemMeta(item, tripId, folderId) {
+  const adminContext = isAdminViewEnabled();
+  const neutralEditButtonClass = "inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]";
+  const accentMoveButtonClass = "inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08]";
+  const accentDeleteButtonClass = "inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-red-300/35 hover:bg-red-300/10 hover:text-red-100";
+  const adminActionButtonClass = "inline-flex border border-amber-300/32 bg-amber-100/[0.03] px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]";
   const summary =
     item.kind === "text"
       ? STRINGS.items.textPost
@@ -3461,7 +4825,7 @@ function renderItemMeta(item, tripId, folderId) {
       : "";
   const actionButtons = [];
 
-  if (canEditTextPost(item)) {
+  if (canEditItem(item)) {
     actionButtons.push(`
       <button
         type="button"
@@ -3469,7 +4833,7 @@ function renderItemMeta(item, tripId, folderId) {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]"
+        class="${adminContext ? adminActionButtonClass : neutralEditButtonClass}"
       >
         ${STRINGS.items.edit}
       </button>
@@ -3484,14 +4848,14 @@ function renderItemMeta(item, tripId, folderId) {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-cyan-100/30 hover:bg-cyan-100/[0.08]"
+        class="${adminContext ? adminActionButtonClass : accentMoveButtonClass}"
       >
-        Move
+        ${STRINGS.items.move}
       </button>
     `);
   }
 
-  if (isAdminViewEnabled()) {
+  if (canDeleteItem(item)) {
     actionButtons.push(`
       <button
         type="button"
@@ -3499,7 +4863,7 @@ function renderItemMeta(item, tripId, folderId) {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="inline-flex border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 transition hover:border-red-300/35 hover:bg-red-300/10 hover:text-red-100"
+        class="${adminContext ? adminActionButtonClass : accentDeleteButtonClass}"
       >
         ${STRINGS.items.delete}
       </button>
@@ -3514,13 +4878,25 @@ function renderItemMeta(item, tripId, folderId) {
   return `${summary}${descriptionMarkup}${actionsMarkup}`;
 }
 
-function renderItemPreview(item, tripId, folderId) {
+function renderItemPreview(item, tripId, folderId, view = "archive") {
   const displayName = getItemDisplayName(item);
 
   if (item.kind === "text") {
-    return `<p class="min-w-[18rem] max-w-[30rem] whitespace-pre-wrap break-words text-[0.78rem] leading-6 tracking-[0.04em] text-stone-300/78 sm:min-w-[22rem]">${escapeHtml(
-      item.bodyText
-    )}</p>`;
+    return `
+      <button
+        type="button"
+        data-action="preview-text"
+        data-view="${escapeHtml(view)}"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="group flex h-20 w-[5.75rem] flex-col justify-between border border-white/12 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.06),rgba(255,255,255,0.01))] px-3 py-3 text-left transition hover:border-white/30 hover:bg-white/[0.06]"
+        aria-label="Preview ${escapeHtml(displayName)}"
+      >
+        <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.64rem] uppercase tracking-[0.18em] text-stone-100">TXT</span>
+        <span class="line-clamp-2 text-[0.62rem] uppercase tracking-[0.14em] text-stone-300/72 group-hover:text-stone-200">${escapeHtml(displayName)}</span>
+      </button>
+    `;
   }
 
   if (item.mimeType.startsWith("image/")) {
@@ -3528,7 +4904,7 @@ function renderItemPreview(item, tripId, folderId) {
       <a href="${escapeHtml(item.downloadURL)}" target="_blank" rel="noreferrer">
         <img src="${escapeHtml(item.downloadURL)}" alt="${escapeHtml(
       displayName
-    )}" class="h-20 w-20 object-cover ring-1 ring-white/10">
+    )}" class="h-[4.5rem] w-[5.75rem] object-cover ring-1 ring-white/10">
       </a>
     `;
   }
@@ -3539,15 +4915,21 @@ function renderItemPreview(item, tripId, folderId) {
         <button
           type="button"
           data-action="preview-video"
+          data-view="${escapeHtml(view)}"
           data-trip-id="${escapeHtml(tripId)}"
           data-folder-id="${escapeHtml(folderId)}"
           data-item-id="${escapeHtml(item.id)}"
-          class="inline-block transition hover:opacity-90"
+          class="group relative inline-block transition hover:opacity-90"
           aria-label="Preview ${escapeHtml(displayName)}"
         >
           <img src="${escapeHtml(item.posterDownloadURL)}" alt="${escapeHtml(
         displayName
-      )}" class="block h-16 w-28 max-h-16 overflow-hidden object-cover ring-1 ring-white/10">
+      )}" class="block h-[4.5rem] w-[5.75rem] overflow-hidden object-cover ring-1 ring-white/10">
+          <span class="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span class="flex h-10 w-10 items-center justify-center rounded-full border border-white/18 bg-black/45 text-white/90">
+              &#9654;
+            </span>
+          </span>
         </button>
       `;
     }
@@ -3556,28 +4938,38 @@ function renderItemPreview(item, tripId, folderId) {
       <button
         type="button"
         data-action="preview-video"
+        data-view="${escapeHtml(view)}"
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="inline-flex h-16 w-28 max-h-16 items-center justify-center border border-white/10 bg-black/35 text-[0.62rem] uppercase tracking-[0.16em] text-stone-300/72 transition hover:border-white/25 hover:text-stone-100"
+        class="inline-flex h-[4.5rem] w-[5.75rem] items-center justify-center border border-white/10 bg-black/35 text-[0.62rem] uppercase tracking-[0.16em] text-stone-300/72 transition hover:border-white/25 hover:text-stone-100"
         aria-label="Preview ${escapeHtml(displayName)}"
       >
-        VIDEO
+        &#9654;
       </button>
     `;
   }
 
-  return `<a class="text-sky-300 underline-offset-4 hover:underline uppercase" href="${escapeHtml(
+  return `<a class="text-stone-100 underline-offset-4 hover:text-white hover:underline uppercase" href="${escapeHtml(
     item.downloadURL
   )}" target="_blank" rel="noreferrer">${STRINGS.uploads.genericFile}</a>`;
 }
 
 function renderItemAuthor(item) {
   const authorLabel = resolveItemAuthorLabel(item);
+  const authorRouteId = getItemAuthorRouteId(item);
 
-  return authorLabel
-    ? `<span class="text-stone-200/82">${escapeHtml(authorLabel)}</span>`
-    : `<span class="text-stone-300/40">${STRINGS.items.emptyName}</span>`;
+  if (!authorLabel) {
+    return `<span class="text-stone-300/40">${STRINGS.items.emptyName}</span>`;
+  }
+
+  if (!authorRouteId || isItemBrandAuthored(item)) {
+    return `<span class="text-stone-200/82">${escapeHtml(authorLabel)}</span>`;
+  }
+
+  return `<a class="text-stone-100/82 underline-offset-4 hover:text-white hover:underline" href="${escapeHtml(
+    buildProfilePath(authorRouteId)
+  )}">${escapeHtml(authorLabel)}</a>`;
 }
 
 function renderAdminSelects() {
@@ -3639,11 +5031,33 @@ function renderUploadQueue() {
       `;
     })
     .join("");
+
+  syncUploadQueueVisibility();
+}
+
+function syncUploadQueueVisibility() {
+  if (!uploadQueuePanel) {
+    return;
+  }
+
+  const shouldShow = Boolean(
+    canUploadMedia() &&
+      contributeModalOpen &&
+      (
+        currentContributionContext?.mode === "upload" ||
+        uploadJobs.length > 0
+      )
+  );
+
+  uploadQueuePanel.classList.toggle("hidden", !shouldShow);
 }
 
 function renderFriendsPanel() {
   const signedIn = Boolean(currentUser?.email);
   const visibleMembers = getVisibleMembers();
+  const authoredCounts = new Map(
+    visibleMembers.map((friend) => [friend.uid || friend.id, countAuthoredItemsForUser(friend)])
+  );
   const countLabel = padCount(visibleMembers.length, STRINGS.members.countLabel);
   const statusText = !signedIn
     ? ""
@@ -3686,7 +5100,11 @@ function renderFriendsPanel() {
           ${STRINGS.members.empty}
         </div>
       `
-      : visibleMembers.map((friend) => renderFriendCard(friend)).join("");
+      : visibleMembers
+          .map((friend) =>
+            renderFriendCard(friend, authoredCounts.get(friend.uid || friend.id) || 0)
+          )
+          .join("");
 
   if (friendsDesktopList) {
     friendsDesktopList.innerHTML = markup;
@@ -3747,22 +5165,29 @@ function syncFolderSelect(selectElement, tripId) {
   }
 }
 
-function getSelectedFolderId(tripId) {
-  const folders = getFoldersForTrip(tripId);
-  const currentSelection = selectedFolders.get(tripId);
+function getSelectedFolderId(tripId, view = "archive", fallbackFolders = null) {
+  const folders = Array.isArray(fallbackFolders) ? fallbackFolders : getFoldersForTrip(tripId);
+  const selectionMap = getFolderSelectionMap(view);
+  const selectionKey = buildFolderSelectionKey(tripId, view);
+  const currentSelection = selectionMap.get(selectionKey);
 
   if (currentSelection && folders.some((folder) => folder.id === currentSelection)) {
     return currentSelection;
   }
 
   if (folders.length === 0) {
-    selectedFolders.delete(tripId);
+    selectionMap.delete(selectionKey);
     return "";
   }
 
   const defaultFolderId = folders[0]?.id || "";
-  selectedFolders.set(tripId, defaultFolderId);
+  selectionMap.set(selectionKey, defaultFolderId);
   return defaultFolderId;
+}
+
+function setSelectedFolderId(tripId, folderId, view = "archive") {
+  const selectionMap = getFolderSelectionMap(view);
+  selectionMap.set(buildFolderSelectionKey(tripId, view), folderId);
 }
 
 function getFoldersForTrip(tripId) {
@@ -3866,8 +5291,8 @@ function renderItemSortOptions(selectedMode) {
     .join("");
 }
 
-function getItemSortMode(tripId, folderId) {
-  const cacheKey = buildFolderCacheKey(tripId, folderId);
+function getItemSortMode(tripId, folderId, view = "archive") {
+  const cacheKey = buildFolderCacheKey(tripId, folderId, view);
   return itemSortPreferences.get(cacheKey) || ITEM_SORT_MEDIA_DATE_ASC;
 }
 
@@ -3968,8 +5393,34 @@ function compareTieBreakers(leftItem, rightItem) {
   );
 }
 
-function buildFolderCacheKey(tripId, folderId) {
-  return `${tripId}:${folderId}`;
+function buildFolderCacheKey(tripId, folderId, view = "archive") {
+  return `${view}:${tripId}:${folderId}`;
+}
+
+function buildFolderSelectionKey(tripId, view = "archive") {
+  if (view === "profile") {
+    const routeKey = currentRoute?.kind === ROUTE_PROFILE_PUBLIC
+      ? currentRoute.routeId
+      : "self";
+    return `${routeKey}:${tripId}`;
+  }
+
+  return tripId;
+}
+
+function getFolderSelectionMap(view = "archive") {
+  return view === "profile" ? profileSelectedFolders : selectedFolders;
+}
+
+function doesStoragePathBelongToCurrentUser(storagePath) {
+  return Boolean(
+    currentUser?.uid &&
+      String(storagePath || "").includes(`/${currentUser.uid}/`)
+  );
+}
+
+function hasOwnProperty(value, key) {
+  return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
 }
 
 function buildFolderPathLabel(trip, folder) {
@@ -4077,30 +5528,98 @@ function normalizeItem(item) {
     posterDownloadURL: String(item?.posterDownloadURL || ""),
     posterStoragePath: String(item?.posterStoragePath || ""),
     authorLabel: String(item?.authorLabel || ""),
+    authorUid: String(item?.authorUid || ""),
+    authorRouteId: normalizeRouteId(item?.authorRouteId),
+    authorAliasMode: normalizeAuthorAliasMode(item?.authorAliasMode),
+    authorGoogleName: normalizePersonName(item?.authorGoogleName),
+    authorDisplayName: normalizeDisplayName(item?.authorDisplayName),
     uploadedByUid: String(item?.uploadedByUid || item?.createdByUid || ""),
     createdByEmail: String(item?.createdByEmail || ""),
     createdByUid: String(item?.createdByUid || ""),
+    tripId: String(item?.tripId || ""),
+    folderId: String(item?.folderId || ""),
     createdAtMs,
   };
 }
 
 function normalizeFriend(user) {
   const email = String(user?.email || "").trim().toLowerCase();
-  const name = String(user?.displayName || "")
-    .trim()
-    .replace(/\s+/g, " ");
+  const displayName = normalizeDisplayName(user?.displayName);
+  const googleName = normalizePersonName(
+    user?.googleName || user?.authName || inferNameFromEmail(email)
+  );
   const role = resolveStoredUserRole(user?.role, email);
 
   return {
     id: String(user?.id || user?.uid || email || Date.now()),
     uid: String(user?.uid || ""),
     email,
-    displayName: name,
+    displayName,
+    googleName,
+    routeId: normalizeRouteId(user?.routeId),
     photoURL: String(user?.photoStoragePath ? user?.photoURL || "" : ""),
     photoStoragePath: String(user?.photoStoragePath || ""),
     role,
     isAdmin: isElevatedRole(role),
   };
+}
+
+function normalizeDisplayName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizePersonName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeRouteId(value) {
+  const routeId = String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 3);
+
+  return /^[A-Z0-9]{3}$/.test(routeId) ? routeId : "";
+}
+
+function isValidRouteId(routeId) {
+  return /^[A-Z0-9]{3}$/.test(String(routeId || ""));
+}
+
+function normalizeAuthorAliasMode(value) {
+  return value === AUTHOR_ALIAS_BRAND ? AUTHOR_ALIAS_BRAND : AUTHOR_ALIAS_SELF;
+}
+
+function getFriendGoogleName(friend) {
+  return normalizePersonName(friend?.googleName || inferNameFromEmail(friend?.email));
+}
+
+function getFriendLabel(friend) {
+  return (
+    normalizeDisplayName(friend?.displayName) ||
+    getFriendGoogleName(friend) ||
+    STRINGS.members.unknown
+  );
+}
+
+function getFriendSecondaryLabel(friend) {
+  return friend?.displayName ? getFriendGoogleName(friend) : "";
+}
+
+function buildProfilePath(routeId) {
+  return routeId ? `/${normalizeRouteId(routeId)}` : "/profile";
+}
+
+function getFriendByUid(uid) {
+  return friends.find((friend) => friend.uid === uid);
+}
+
+function getFriendByRouteId(routeId) {
+  const normalizedRouteId = normalizeRouteId(routeId);
+  return friends.find((friend) => friend.routeId === normalizedRouteId);
 }
 
 function compareFriends(left, right) {
@@ -4109,12 +5628,17 @@ function compareFriends(left, right) {
   return leftLabel.localeCompare(rightLabel);
 }
 
-function renderFriendCard(friend) {
+function renderFriendCard(friend, postCount = 0) {
   const label = getFriendLabel(friend);
   const badge = getRoleLabel(friend.role);
   const isCurrentUser = Boolean(currentUser?.uid && friend.uid === currentUser.uid);
   const canEditRole = isAdminViewEnabled();
   const canDeleteProfile = canEditRole && !isProtectedProfile(friend);
+  const profileHref = friend.routeId ? buildProfilePath(friend.routeId) : "";
+  const nameMarkup = profileHref
+    ? `<a href="${escapeHtml(profileHref)}" class="truncate text-sm uppercase tracking-[0.14em] text-stone-100 transition hover:text-white xl:text-[0.78rem] xl:tracking-[0.12em] min-[1920px]:text-sm min-[1920px]:tracking-[0.14em]">${escapeHtml(label)}</a>`
+    : `<p class="truncate text-sm uppercase tracking-[0.14em] text-stone-100 xl:text-[0.78rem] xl:tracking-[0.12em] min-[1920px]:text-sm min-[1920px]:tracking-[0.14em]">${escapeHtml(label)}</p>`;
+  const metaLabel = `${friend.routeId ? `#${friend.routeId} / ` : ""}${buildMemberPostCountLabel(postCount)}`;
   const currentUserMarkup = isCurrentUser
     ? `<span class="border border-white/10 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-300/70 xl:px-1 xl:text-[0.5rem] min-[1920px]:px-1.5 min-[1920px]:text-[0.58rem]">${STRINGS.members.you}</span>`
     : "";
@@ -4133,9 +5657,10 @@ function renderFriendCard(friend) {
         <img src="${escapeHtml(getFriendPhotoUrl(friend))}" alt="${escapeHtml(label)}" class="h-12 w-12 shrink-0 border border-white/10 bg-black object-cover object-center xl:h-9 xl:w-9 min-[1920px]:h-12 min-[1920px]:w-12">
         <div class="min-w-0 flex-1 space-y-2 xl:space-y-1.5 min-[1920px]:space-y-2">
           <div class="flex items-center gap-2">
-            <p class="truncate text-sm uppercase tracking-[0.14em] text-stone-100 xl:text-[0.78rem] xl:tracking-[0.12em] min-[1920px]:text-sm min-[1920px]:tracking-[0.14em]">${escapeHtml(label)}</p>
+            ${nameMarkup}
             ${inlineCurrentUserMarkup}
           </div>
+          <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-400/74">${escapeHtml(metaLabel)}</p>
           ${stackedMetaMarkup}
         </div>
         ${sideRoleMarkup}
@@ -4155,7 +5680,7 @@ function renderFriendControls(friend, canDeleteProfile) {
               type="button"
               data-action="delete-profile"
               data-user-id="${escapeHtml(friend.uid || friend.id)}"
-              class="border border-white/10 px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-300/75 transition hover:border-red-300/35 hover:bg-red-300/10 hover:text-red-100 xl:px-1.5 xl:py-0.5 xl:text-[0.52rem] min-[1920px]:px-2 min-[1920px]:py-1 min-[1920px]:text-[0.58rem]"
+              class="border border-amber-300/32 bg-amber-100/[0.03] px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08] xl:px-1.5 xl:py-0.5 xl:text-[0.52rem] min-[1920px]:px-2 min-[1920px]:py-1 min-[1920px]:text-[0.58rem]"
             >
               ${STRINGS.members.deleteProfile}
             </button>
@@ -4180,19 +5705,11 @@ function renderRoleSelect(friend) {
       data-action="role-select"
       data-user-id="${escapeHtml(friend.uid || friend.id)}"
       ${roleLocked ? "disabled" : ""}
-      class="border border-white/10 bg-black/40 px-2 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-200 outline-none transition focus:border-white/30 xl:px-1.5 xl:py-1.5 xl:text-[0.52rem] min-[1920px]:px-2 min-[1920px]:py-2 min-[1920px]:text-[0.58rem]"
+      class="border border-amber-300/28 bg-amber-100/[0.04] px-2 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-amber-100 outline-none transition focus:border-amber-200/55 xl:px-1.5 xl:py-1.5 xl:text-[0.52rem] min-[1920px]:px-2 min-[1920px]:py-2 min-[1920px]:text-[0.58rem]"
     >
       ${options.join("")}
     </select>
   `;
-}
-
-function getFriendLabel(friend) {
-  return (
-    friend.displayName ||
-    inferNameFromEmail(friend.email) ||
-    STRINGS.members.unknown
-  );
 }
 
 function isProtectedProfile(friend) {

@@ -155,14 +155,18 @@ async function handleVaultVerify(request, response) {
 }
 
 async function serveStaticFile(request, pathname, response) {
-  const targetPath = resolveStaticPath(pathname);
+  let targetPath = resolveStaticPath(pathname);
 
   if (!targetPath) {
     return sendText(response, 403, "Forbidden");
   }
 
   if (!existsSync(targetPath)) {
-    return sendText(response, 404, "Not Found");
+    if (shouldServeSpaShell(pathname)) {
+      targetPath = resolveStaticPath("/index.html");
+    } else {
+      return sendText(response, 404, "Not Found");
+    }
   }
 
   const fileStats = statSync(targetPath);
@@ -202,6 +206,18 @@ async function serveStaticFile(request, pathname, response) {
   }
 
   await pipeFileToResponse(createReadStream(targetPath), response);
+}
+
+function shouldServeSpaShell(pathname) {
+  if (!pathname || pathname.startsWith("/api/")) {
+    return false;
+  }
+
+  if (pathname === "/health") {
+    return false;
+  }
+
+  return path.extname(pathname) === "";
 }
 
 function resolveStaticPath(pathname) {

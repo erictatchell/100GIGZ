@@ -53,6 +53,9 @@ service cloud.firestore {
       return request.resource.data.uid == userId
         && request.resource.data.email is string
         && request.resource.data.displayName is string
+        && request.resource.data.googleName is string
+        && request.resource.data.routeId is string
+        && request.resource.data.routeId.matches('^[A-Z0-9]{3}$')
         && request.resource.data.photoURL is string;
     }
 
@@ -76,9 +79,12 @@ service cloud.firestore {
     function isValidSelfUpdate() {
       return request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
-        && request.resource.data.displayName == resource.data.displayName
         && request.resource.data.role == resource.data.role
         && request.resource.data.isAdmin == resource.data.isAdmin
+        && request.resource.data.displayName is string
+        && request.resource.data.googleName is string
+        && request.resource.data.routeId is string
+        && request.resource.data.routeId.matches('^[A-Z0-9]{3}$')
         && request.resource.data.photoURL is string
         && request.resource.data.photoStoragePath is string;
     }
@@ -112,6 +118,13 @@ service cloud.firestore {
         && request.resource.data.downloadURL is string
         && request.resource.data.storagePath is string
         && request.resource.data.authorLabel is string
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorRouteId is string
+        && request.resource.data.authorAliasMode == 'self'
+        && request.resource.data.authorDisplayName is string
+        && request.resource.data.authorGoogleName is string
+        && request.resource.data.tripId is string
+        && request.resource.data.folderId is string
         && request.resource.data.mediaCategory in ['image', 'video', 'file']
         && request.resource.data.size is number;
     }
@@ -125,12 +138,18 @@ service cloud.firestore {
         && request.resource.data.body is string
         && request.resource.data.name is string
         && request.resource.data.mimeType == 'text/plain'
-        && request.resource.data.authorLabel is string;
+        && request.resource.data.authorLabel is string
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorRouteId is string
+        && request.resource.data.authorAliasMode == 'self'
+        && request.resource.data.authorDisplayName is string
+        && request.resource.data.authorGoogleName is string
+        && request.resource.data.tripId is string
+        && request.resource.data.folderId is string;
     }
 
-    function isTextAuthor() {
+    function isItemOwner() {
       return isMember()
-        && resource.data.kind == 'text'
         && (
           resource.data.createdByUid == request.auth.uid ||
           (
@@ -140,6 +159,10 @@ service cloud.firestore {
         );
     }
 
+    function isTextAuthor() {
+      return isItemOwner() && resource.data.kind == 'text';
+    }
+
     function isValidMemberTextUpdate() {
       return isTextAuthor()
         && request.resource.data.kind == 'text'
@@ -147,16 +170,39 @@ service cloud.firestore {
         && request.resource.data.body is string
         && request.resource.data.name is string
         && request.resource.data.mimeType == 'text/plain'
-        && request.resource.data.createdByUid == request.auth.uid
-        && request.resource.data.createdByEmail == request.auth.token.email
-        && request.resource.data.authorLabel is string
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdByEmail == resource.data.createdByEmail
+        && request.resource.data.authorLabel == resource.data.authorLabel
+        && request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.authorRouteId == resource.data.authorRouteId
+        && request.resource.data.authorAliasMode == resource.data.authorAliasMode
+        && request.resource.data.authorDisplayName == resource.data.authorDisplayName
+        && request.resource.data.authorGoogleName == resource.data.authorGoogleName
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'title',
           'body',
           'name',
-          'authorLabel',
-          'createdByUid',
-          'createdByEmail',
+          'updatedAt',
+          'updatedByUid',
+          'updatedByEmail'
+        ]);
+    }
+
+    function isValidMemberFileUpdate() {
+      return isItemOwner()
+        && resource.data.kind == 'file'
+        && request.resource.data.kind == 'file'
+        && request.resource.data.description is string
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdByEmail == resource.data.createdByEmail
+        && request.resource.data.authorLabel == resource.data.authorLabel
+        && request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.authorRouteId == resource.data.authorRouteId
+        && request.resource.data.authorAliasMode == resource.data.authorAliasMode
+        && request.resource.data.authorDisplayName == resource.data.authorDisplayName
+        && request.resource.data.authorGoogleName == resource.data.authorGoogleName
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'description',
           'updatedAt',
           'updatedByUid',
           'updatedByEmail'
@@ -191,8 +237,8 @@ service cloud.firestore {
         match /items/{itemId} {
           allow read: if request.auth == null || isMember();
           allow create: if isAdmin() || isValidMemberMediaCreate() || isValidMemberTextCreate();
-          allow update: if isAdmin() || isValidMemberTextUpdate();
-          allow delete: if isAdmin();
+          allow update: if isAdmin() || isValidMemberTextUpdate() || isValidMemberFileUpdate();
+          allow delete: if isAdmin() || isItemOwner();
         }
       }
     }

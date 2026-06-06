@@ -28,12 +28,12 @@
     }
 
     #logo.logo-glitch-loop::before {
-      color: rgba(34, 211, 238, 0.88);
+      color: rgba(255, 255, 255, 0.88);
       animation: logo-glitch-layer-a 5s steps(1, end) infinite;
     }
 
     #logo.logo-glitch-loop::after {
-      color: rgba(244, 114, 182, 0.84);
+      color: rgba(161, 161, 170, 0.84);
       animation: logo-glitch-layer-b 5s steps(1, end) infinite;
     }
 
@@ -46,32 +46,32 @@
 
       2% {
         transform: translate3d(1px, 0, 0) skewX(1deg);
-        text-shadow: -3px 0 0 rgba(34, 211, 238, 0.7), 3px 0 0 rgba(244, 114, 182, 0.5);
+        text-shadow: -3px 0 0 rgba(255, 255, 255, 0.7), 3px 0 0 rgba(161, 161, 170, 0.5);
       }
 
       4% {
         transform: translate3d(-1px, 1px, 0) skewX(-1deg);
-        text-shadow: 3px 0 0 rgba(34, 211, 238, 0.55), -3px 0 0 rgba(244, 114, 182, 0.55);
+        text-shadow: 3px 0 0 rgba(255, 255, 255, 0.55), -3px 0 0 rgba(161, 161, 170, 0.55);
       }
 
       40% {
         transform: translate3d(2px, -1px, 0) skewX(1deg);
-        text-shadow: -4px 0 0 rgba(34, 211, 238, 0.82), 4px 0 0 rgba(244, 114, 182, 0.68);
+        text-shadow: -4px 0 0 rgba(255, 255, 255, 0.82), 4px 0 0 rgba(161, 161, 170, 0.68);
       }
 
       42% {
         transform: translate3d(-2px, 1px, 0) skewX(-1deg);
-        text-shadow: 4px 0 0 rgba(34, 211, 238, 0.65), -4px 0 0 rgba(244, 114, 182, 0.72);
+        text-shadow: 4px 0 0 rgba(255, 255, 255, 0.65), -4px 0 0 rgba(161, 161, 170, 0.72);
       }
 
       60% {
         transform: translate3d(1px, 0, 0) skewX(0.5deg);
-        text-shadow: -3px 0 0 rgba(34, 211, 238, 0.78), 3px 0 0 rgba(244, 114, 182, 0.64);
+        text-shadow: -3px 0 0 rgba(255, 255, 255, 0.78), 3px 0 0 rgba(161, 161, 170, 0.64);
       }
 
       62% {
         transform: translate3d(-1px, 0, 0) skewX(-0.5deg);
-        text-shadow: 3px 0 0 rgba(34, 211, 238, 0.64), -3px 0 0 rgba(244, 114, 182, 0.72);
+        text-shadow: 3px 0 0 rgba(255, 255, 255, 0.64), -3px 0 0 rgba(161, 161, 170, 0.72);
       }
     }
 
@@ -158,6 +158,24 @@
         animation: none !important;
       }
     }
+
+    #site-shell[data-page="profile"] {
+      border-color: rgba(255, 255, 255, 0.14);
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+        0 0 96px rgba(255, 255, 255, 0.04);
+    }
+
+    #scroll-banner[data-page="profile"] {
+      background:
+        linear-gradient(
+          to right,
+          rgba(32, 32, 32, 0.82),
+          rgba(10, 10, 10, 0.86) 46%,
+          rgba(10, 10, 10, 0.9)
+        );
+      border-bottom-color: rgba(255, 255, 255, 0.12);
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script type="module" src="/static/app.js"></script>
@@ -187,7 +205,7 @@
     </div>
   </section>
 
-  <main id="site-shell" aria-hidden="true" class="pointer-events-none relative m-3 min-h-[calc(100vh-1.5rem)] border border-white/10 bg-black/80 px-5 py-6 opacity-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025),0_0_80px_rgba(255,255,255,0.08)] transition-opacity duration-700 sm:m-6 sm:min-h-[calc(100vh-3rem)] sm:px-7 sm:py-7 md:px-12 md:py-10 lg:px-16 lg:py-14">
+  <main id="site-shell" aria-hidden="true" class="pointer-events-none relative m-2 min-h-[calc(100vh-1rem)] border border-white/10 bg-black/80 px-4 py-4 opacity-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025),0_0_80px_rgba(255,255,255,0.08)] transition-opacity duration-700 sm:m-4 sm:min-h-[calc(100vh-2rem)] sm:px-6 sm:py-5 md:px-10 md:py-7 lg:px-14 lg:py-9">
     <div aria-hidden="true" class="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent_24%)]"></div>
 
     <div class="relative">
@@ -196,7 +214,11 @@
           100GIGZ
         </a>
 
+        <div id="scroll-banner-context" class="hidden min-w-0 flex-1 text-right font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.22em] text-stone-200/78 sm:block"></div>
+
         <div class="flex items-center gap-2 sm:gap-3">
+          <div id="scroll-banner-mobile-menu-slot" class="flex min-h-[2.75rem] items-center justify-end py-1 pr-1 xl:hidden sm:min-h-[3rem] sm:pr-0"></div>
+
           <div id="scroll-banner-desktop-actions" class="hidden items-center gap-2 xl:flex">
             <label id="banner-admin-panels-control" class="hidden items-center gap-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-200/82">
               <span id="banner-admin-panels-toggle-text">Show Admin Panels</span>
@@ -210,7 +232,7 @@
               Profile
             </button>
 
-            <button id="banner-google-signin-button" type="button" class="hidden justify-center border border-white/12 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.64rem] uppercase tracking-[0.2em] text-stone-100 transition hover:border-cyan-100/30 hover:bg-cyan-100/[0.08]">
+            <button id="banner-google-signin-button" type="button" class="hidden justify-center border border-white/12 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.64rem] uppercase tracking-[0.2em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08]">
               Sign In With Google
             </button>
 
@@ -220,15 +242,6 @@
           </div>
         </div>
       </div>
-
-      <button id="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu-panel" class="fixed right-3 top-2.5 z-[55] flex h-10 w-10 items-center justify-center border border-white/12 bg-black/30 text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.24)] backdrop-blur-sm transition hover:border-white/30 hover:bg-white/[0.08] xl:hidden sm:right-6 sm:top-2.5">
-        <span id="mobile-menu-toggle-label" class="sr-only">Open Menu</span>
-        <span aria-hidden="true" class="flex flex-col gap-1.5">
-          <span class="block h-px w-5 bg-current"></span>
-          <span class="block h-px w-5 bg-current"></span>
-          <span class="block h-px w-5 bg-current"></span>
-        </span>
-      </button>
 
       <div id="mobile-menu-backdrop" class="fixed inset-0 z-30 hidden bg-black/60 xl:hidden"></div>
 
@@ -252,14 +265,28 @@
         </div>
       </aside>
 
-      <header class="flex flex-col gap-5 border-b border-white/10 pb-5 sm:gap-8 sm:pb-8 xl:flex-row xl:items-start xl:justify-between">
+      <header class="flex flex-col gap-4 border-b border-white/10 pb-4 sm:gap-6 sm:pb-6 xl:flex-row xl:items-start xl:justify-between">
         <div class="max-w-3xl">
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.35em] text-stone-300/65 sm:text-[0.8rem]">
             100GIGZ / ARCHIVE
           </p>
-          <a id="logo" href="/" class="mt-2 inline-block font-['Teko',sans-serif] text-[clamp(3.4rem,13vw,8.6rem)] font-medium uppercase leading-[0.72] tracking-[0.08em] text-stone-100 opacity-100 transition-[opacity,transform] duration-[1400ms] ease-out sm:mt-3 sm:tracking-[0.12em]">
-            100GIGZ 
-          </a>
+          <div class="mt-2 flex items-start justify-between gap-4 sm:mt-3">
+            <a id="logo" href="/" class="inline-block font-['Teko',sans-serif] text-[clamp(3.4rem,13vw,8.6rem)] font-medium uppercase leading-[0.72] tracking-[0.08em] text-stone-100 opacity-100 transition-[opacity,transform] duration-[1400ms] ease-out sm:tracking-[0.12em]">
+              100GIGZ 
+            </a>
+
+            <div id="header-mobile-menu-slot" class="flex min-h-[2.75rem] shrink-0 items-start justify-end pb-1 pr-1 pt-1 xl:hidden sm:min-h-[3rem] sm:pr-0 sm:pt-1.5">
+              <button id="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu-panel" class="flex h-9 w-9 shrink-0 items-center justify-center border border-white/12 bg-black/30 text-stone-100 shadow-[0_12px_32px_rgba(0,0,0,0.24)] backdrop-blur-sm transition-[transform,border-color,background-color,box-shadow] duration-300 hover:border-white/30 hover:bg-white/[0.08] xl:hidden sm:h-10 sm:w-10">
+                <span id="mobile-menu-toggle-label" class="sr-only">Open Menu</span>
+                <span aria-hidden="true" class="flex flex-col gap-1.5">
+                  <span class="block h-px w-5 bg-current"></span>
+                  <span class="block h-px w-5 bg-current"></span>
+                  <span class="block h-px w-5 bg-current"></span>
+                </span>
+              </button>
+            </div>
+          </div>
+          <p id="header-route-context" class="mt-3 hidden font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.24em] text-stone-200/78 sm:mt-4 sm:text-[0.72rem]"></p>
           <p class="mt-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.28em] text-stone-300/58 sm:mt-4 sm:text-[0.72rem]">
             Featured Message
           </p>
@@ -309,95 +336,9 @@
         </div>
       </header>
 
-      <div class="mt-5 grid gap-8 sm:mt-8 xl:grid-cols-[minmax(0,4fr)_minmax(15rem,1fr)] xl:items-start min-[1920px]:grid-cols-[minmax(0,1fr)_420px]">
+      <div class="mt-4 grid gap-6 sm:mt-6 xl:grid-cols-[minmax(0,4fr)_minmax(15rem,1fr)] xl:items-start min-[1920px]:grid-cols-[minmax(0,1fr)_420px]">
         <div class="min-w-0">
       <div id="desktop-control-panel-slot" class="space-y-4">
-      <details id="contribute-panel" class="hidden border border-cyan-200/28 bg-cyan-200/[0.05] shadow-[inset_0_0_0_1px_rgba(165,243,252,0.08)] group">
-        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5 sm:py-5">
-          <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-cyan-100/85">
-            Contribute
-          </p>
-          <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.22em] text-cyan-100/62">
-            Menu
-          </span>
-        </summary>
-
-        <div class="border-t border-cyan-100/15 px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
-        <div class="grid gap-5 xl:grid-cols-2">
-          <form id="upload-form" class="space-y-4 border border-white/10 p-4">
-            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] text-stone-300/65">
-              Upload Media
-            </p>
-
-            <label class="block">
-              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Trip</span>
-              <select id="upload-trip-select" name="tripId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
-            </label>
-
-            <label class="block">
-              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Folder</span>
-              <select id="upload-folder-select" name="folderId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
-            </label>
-
-            <label class="block">
-              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Files</span>
-              <input id="upload-files-input" name="files" type="file" multiple accept="image/*,video/*" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition file:mr-4 file:border-0 file:bg-white/8 file:px-3 file:py-2 file:font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] file:text-[0.68rem] file:uppercase file:tracking-[0.18em] file:text-stone-200 focus:border-white/35" required>
-            </label>
-
-            <label class="block">
-              <span id="upload-description-label" class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Description</span>
-              <textarea id="upload-description-input" name="description" rows="3" maxlength="800" placeholder="OPTIONAL DESCRIPTION..." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35"></textarea>
-            </label>
-
-            <button type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
-              Upload Selected Files
-            </button>
-          </form>
-
-          <form id="text-post-form" class="space-y-4 border border-white/10 p-4">
-            <p id="text-post-form-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] text-stone-300/65">
-              New Text Post
-            </p>
-
-            <label class="block">
-              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Trip</span>
-              <select id="text-trip-select" name="tripId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
-            </label>
-
-            <label class="block">
-              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Folder</span>
-              <select id="text-folder-select" name="folderId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
-            </label>
-
-            <label class="block">
-              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Post title</span>
-              <input id="text-title-input" name="title" maxlength="60" placeholder="DAY NOTES" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
-            </label>
-
-            <label class="block">
-              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Body</span>
-              <textarea id="text-body-input" name="body" rows="5" maxlength="8000" placeholder="POST BODY..." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required></textarea>
-            </label>
-
-            <div class="flex flex-col gap-3 sm:flex-row">
-              <button id="text-post-submit-button" type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
-                Add Text Post
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <section class="mt-5 border border-white/10 p-4">
-          <div class="flex flex-col gap-2 border-b border-white/10 pb-3">
-            <p id="upload-queue-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/65">
-              Upload Queue
-            </p>
-          </div>
-          <div id="upload-status-list" class="mt-4 space-y-2"></div>
-        </section>
-        </div>
-      </details>
-
       <details id="admin-panel" class="hidden border border-dashed border-amber-300/70 bg-amber-100/[0.04] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.08)] group">
         <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5 sm:py-5">
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-amber-100/78">
@@ -420,7 +361,7 @@
               <textarea id="featured-message-input" name="featuredMessage" rows="3" maxlength="180" placeholder="2026 LOADING.." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35"></textarea>
             </label>
 
-            <button id="featured-message-submit" type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+            <button id="featured-message-submit" type="submit" class="w-full border border-amber-300/32 bg-amber-100/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]">
               Save Featured Message
             </button>
           </form>
@@ -445,7 +386,7 @@
               <input id="trip-folders-input" name="tripFolders" maxlength="120" placeholder="thu,fri,sat,sun,mon,movie" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm lowercase tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35">
             </label>
 
-            <button type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+            <button type="submit" class="w-full border border-amber-300/32 bg-amber-100/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]">
               Create Trip
             </button>
           </form>
@@ -465,7 +406,7 @@
               <input id="folder-name-input" name="folderLabel" maxlength="24" placeholder="fri" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm lowercase tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
             </label>
 
-            <button type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+            <button type="submit" class="w-full border border-amber-300/32 bg-amber-100/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08]">
               Create Folder
             </button>
           </form>
@@ -475,7 +416,7 @@
       </details>
       </div>
 
-      <section id="archive-page" class="mt-8">
+      <section id="archive-page" class="mt-6">
         <div class="flex items-center justify-between border-b border-white/10 pb-4">
           <p id="trip-db-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/65">
             TRIP DB
@@ -488,52 +429,80 @@
         <div id="trip-list" class="mt-6 space-y-6"></div>
       </section>
 
-      <section id="profile-page" class="mt-8 hidden border border-white/10 bg-white/[0.02] p-5 sm:p-6">
+      <section id="profile-page" class="mt-6 hidden border border-white/12 bg-[linear-gradient(to_bottom,rgba(38,38,38,0.18),rgba(8,8,8,0.32)_32%,rgba(8,8,8,0.18))] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)] sm:p-6">
         <div class="border-b border-white/10 pb-4">
-          <p id="profile-page-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-300/65">
-            Profile
-          </p>
-          <p id="profile-page-subtitle" class="mt-3 text-2xl uppercase tracking-[0.16em] text-stone-100">
-            Custom Image
-          </p>
-          <p id="profile-page-helper" class="mt-3 max-w-xl font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.16em] text-stone-300/62">
-            Upload A Custom Profile Image Stored In 100GIGZ.
-          </p>
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div class="min-w-0">
+              <p id="profile-page-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-100/78">
+                Public Profile
+              </p>
+              <p id="profile-page-subtitle" class="mt-3 break-words text-2xl uppercase tracking-[0.16em] text-stone-100 sm:text-3xl">
+                Loading Profile
+              </p>
+              <p id="profile-page-helper" class="mt-3 max-w-2xl font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.16em] text-stone-300/64 sm:text-[0.72rem]">
+                Authored uploads grouped by trip and folder.
+              </p>
+            </div>
+            <p id="profile-page-status" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.64rem] uppercase tracking-[0.2em] text-stone-300/62"></p>
+          </div>
         </div>
 
-        <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
-          <div class="border border-white/10 bg-black/25 p-4">
-            <p id="profile-current-image-label" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.22em] text-stone-300/65">
-              Current Image
-            </p>
-            <div class="mt-4 aspect-square max-w-[20rem] overflow-hidden border border-white/10 bg-black">
-              <img id="profile-image-preview" src="/static/default-profile.svg" alt="Profile preview" class="h-full w-full object-cover object-center">
-            </div>
-          </div>
-
-          <div class="border border-white/10 bg-black/25 p-4">
-            <div class="space-y-4">
-              <div>
-                <p id="profile-name-display" class="text-lg uppercase tracking-[0.14em] text-stone-100"></p>
-                <p id="profile-email-display" class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.16em] text-stone-300/62"></p>
+        <div class="mt-5 grid gap-5 xl:grid-cols-[minmax(22rem,26rem)_minmax(0,1fr)]">
+          <aside class="border border-white/10 bg-black/30 p-4 sm:p-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start xl:flex-col">
+              <div class="w-full max-w-[12rem] overflow-hidden border border-white/10 bg-black xl:max-w-[14rem]">
+                <div class="aspect-square">
+                  <img id="profile-image-preview" src="/static/default-profile.svg" alt="Profile preview" class="h-full w-full object-cover object-center">
+                </div>
               </div>
 
-              <form id="profile-image-form" class="space-y-4">
-                <label class="block">
-                  <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.22em] text-stone-300/65">Image</span>
-                  <input id="profile-image-input" name="profileImage" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition file:mr-4 file:border-0 file:bg-white/8 file:px-3 file:py-2 file:font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] file:text-[0.68rem] file:uppercase file:tracking-[0.18em] file:text-stone-200 focus:border-white/35">
-                </label>
-
-                <button id="profile-image-submit" type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04] sm:w-auto sm:min-w-48">
-                  Upload Image
-                </button>
-              </form>
+              <div class="min-w-0 flex-1 space-y-2 xl:flex-none">
+                <p id="profile-current-image-label" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.2em] text-stone-300/62">
+                  Profile Card
+                </p>
+                <p id="profile-name-display" class="break-words text-xl uppercase tracking-[0.16em] text-stone-100 sm:text-2xl"></p>
+                <p id="profile-route-display" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.2em] text-stone-200/78"></p>
+                <p id="profile-google-name-display" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.16em] text-stone-300/56"></p>
+                <p id="profile-post-count-display" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-400/74"></p>
+              </div>
             </div>
+
+            <form id="profile-image-form" class="mt-5 hidden space-y-4 border-t border-white/10 pt-5">
+              <label class="block">
+                <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.22em] text-stone-300/65">Image</span>
+                <input id="profile-image-input" name="profileImage" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition file:mr-4 file:border-0 file:bg-white/8 file:px-3 file:py-2 file:font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] file:text-[0.68rem] file:uppercase file:tracking-[0.18em] file:text-stone-200 focus:border-white/35">
+              </label>
+
+              <button id="profile-image-submit" type="submit" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.04]">
+                Upload Image
+              </button>
+            </form>
+
+            <form id="profile-details-form" class="mt-5 hidden space-y-4 border-t border-white/10 pt-5">
+              <label class="block">
+                <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.22em] text-stone-300/65">Display Name</span>
+                <input id="profile-display-name-input" name="displayName" maxlength="40" placeholder="OPTIONAL PUBLIC NAME" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35">
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.22em] text-stone-300/65">Route ID</span>
+                <input id="profile-route-input" name="routeId" maxlength="3" placeholder="F3R" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.26em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35">
+              </label>
+
+              <button id="profile-details-submit" type="submit" class="w-full border border-white/12 bg-white/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08]">
+                Save Changes
+              </button>
+            </form>
+          </aside>
+
+          <div class="space-y-5">
+            <div id="profile-empty-state" class="hidden border border-white/10 bg-black/22 px-4 py-4 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.18em] text-stone-300/62"></div>
+            <div id="profile-trip-list" class="space-y-5"></div>
           </div>
         </div>
       </section>
 
-      <section id="friends-mobile-inline-shell" class="mt-8 xl:hidden">
+      <section id="friends-mobile-inline-shell" class="mt-6 xl:hidden">
         <details id="friends-mobile-inline-panel" class="border border-white/10 bg-white/[0.03]">
           <summary class="flex cursor-pointer list-none items-center justify-between px-4 py-4 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100">
             <span id="friends-mobile-inline-title">Members</span>
@@ -569,37 +538,49 @@
       <div id="edit-post-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
         <div id="edit-post-backdrop" class="absolute inset-0 bg-black/72 backdrop-blur-sm"></div>
 
-        <form id="edit-post-form" class="relative w-full max-w-3xl border border-amber-300/55 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.58)]">
-          <div class="flex flex-col gap-3 border-b border-amber-200/18 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+        <form id="edit-post-form" class="relative w-full max-w-3xl border border-orange-300/45 bg-[linear-gradient(to_bottom,rgba(58,24,6,0.94),rgba(18,10,5,0.98))] shadow-[0_24px_96px_rgba(0,0,0,0.58)]">
+          <div class="flex flex-col gap-3 border-b border-orange-200/16 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
             <div class="min-w-0">
-              <p id="edit-post-form-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-amber-100/78">
+              <p id="edit-post-form-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-orange-100/82">
                 Edit Text Post
               </p>
               <p id="edit-post-context" class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/64">
               </p>
             </div>
-            <button id="edit-post-close-button" type="button" class="border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]">
+            <button id="edit-post-close-button" type="button" class="border border-orange-300/28 bg-orange-100/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-orange-100/84 transition hover:border-orange-200/48 hover:bg-orange-100/[0.08]">
               Cancel Edit
             </button>
           </div>
 
           <div class="space-y-4 px-5 py-5 sm:px-6 sm:py-6">
-            <label class="block">
-              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Post title</span>
-              <input id="edit-post-title-input" name="title" maxlength="60" placeholder="DAY NOTES" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
+            <label id="edit-post-alias-shell" class="hidden block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Author Alias</span>
+              <select id="edit-post-author-mode-select" name="authorMode" class="w-full border border-orange-300/24 bg-orange-950/45 px-3 py-3 text-sm uppercase tracking-[0.16em] text-stone-100 outline-none transition focus:border-orange-200/48"></select>
             </label>
 
-            <label class="block">
+            <p id="edit-post-file-name" class="hidden font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/62"></p>
+
+            <label id="edit-post-title-shell" class="block">
+              <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Post title</span>
+              <input id="edit-post-title-input" name="title" maxlength="60" placeholder="DAY NOTES" class="w-full border border-orange-300/24 bg-orange-950/45 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-orange-200/48" required>
+            </label>
+
+            <label id="edit-post-description-shell" class="hidden block">
+              <span id="edit-post-description-label" class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Description</span>
+              <textarea id="edit-post-description-input" name="description" rows="4" maxlength="800" placeholder="OPTIONAL DESCRIPTION..." class="w-full resize-y border border-orange-300/24 bg-orange-950/45 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-orange-200/48"></textarea>
+            </label>
+
+            <label id="edit-post-body-shell" class="block">
               <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Body</span>
-              <textarea id="edit-post-body-input" name="body" rows="8" maxlength="8000" placeholder="POST BODY..." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required></textarea>
+              <textarea id="edit-post-body-input" name="body" rows="8" maxlength="8000" placeholder="POST BODY..." class="w-full resize-y border border-orange-300/24 bg-orange-950/45 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-orange-200/48" required></textarea>
             </label>
           </div>
 
-          <div class="flex flex-col gap-3 border-t border-white/10 px-5 py-5 sm:flex-row sm:justify-end sm:px-6">
-            <button id="edit-post-cancel-button" type="button" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] sm:w-auto sm:min-w-44">
+          <div class="flex flex-col gap-3 border-t border-orange-200/16 px-5 py-5 sm:flex-row sm:justify-end sm:px-6">
+            <button id="edit-post-cancel-button" type="button" class="w-full border border-orange-300/28 bg-orange-100/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-orange-100/84 transition hover:border-orange-200/48 hover:bg-orange-100/[0.08] sm:w-auto sm:min-w-44">
               Cancel Edit
             </button>
-            <button id="edit-post-save-button" type="submit" class="w-full border border-amber-300/38 bg-amber-100/[0.04] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200/55 hover:bg-amber-100/[0.08] sm:w-auto sm:min-w-44">
+            <button id="edit-post-save-button" type="submit" class="w-full border border-orange-300/36 bg-orange-100/[0.05] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-orange-100 transition hover:border-orange-200/52 hover:bg-orange-100/[0.1] sm:w-auto sm:min-w-44">
               Save Changes
             </button>
           </div>
@@ -609,16 +590,16 @@
       <div id="move-item-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
         <div id="move-item-backdrop" class="absolute inset-0 bg-black/72 backdrop-blur-sm"></div>
 
-        <form id="move-item-form" class="relative w-full max-w-2xl border border-cyan-200/38 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.58)]">
-          <div class="flex flex-col gap-3 border-b border-cyan-100/18 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+        <form id="move-item-form" class="relative w-full max-w-2xl border border-orange-300/38 bg-[linear-gradient(to_bottom,rgba(54,24,8,0.94),rgba(16,10,5,0.98))] shadow-[0_24px_96px_rgba(0,0,0,0.58)]">
+          <div class="flex flex-col gap-3 border-b border-orange-200/16 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
             <div class="min-w-0">
-              <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-cyan-100/78">
+              <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-orange-100/82">
                 Move Item
               </p>
               <p id="move-item-title" class="mt-2 break-words text-lg uppercase tracking-[0.14em] text-stone-100 sm:text-xl"></p>
               <p id="move-item-context" class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/64"></p>
             </div>
-            <button id="move-item-close-button" type="button" class="border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]">
+            <button id="move-item-close-button" type="button" class="border border-orange-300/28 bg-orange-100/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-orange-100/84 transition hover:border-orange-200/48 hover:bg-orange-100/[0.08]">
               Cancel Move
             </button>
           </div>
@@ -626,15 +607,15 @@
           <div class="space-y-4 px-5 py-5 sm:px-6 sm:py-6">
             <label class="block">
               <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Destination Folder</span>
-              <select id="move-item-folder-select" name="folderId" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-white/35" required></select>
+              <select id="move-item-folder-select" name="folderId" class="w-full border border-orange-300/24 bg-orange-950/45 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition focus:border-orange-200/48" required></select>
             </label>
           </div>
 
-          <div class="flex flex-col gap-3 border-t border-white/10 px-5 py-5 sm:flex-row sm:justify-end sm:px-6">
-            <button id="move-item-cancel-button" type="button" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] sm:w-auto sm:min-w-44">
+          <div class="flex flex-col gap-3 border-t border-orange-200/16 px-5 py-5 sm:flex-row sm:justify-end sm:px-6">
+            <button id="move-item-cancel-button" type="button" class="w-full border border-orange-300/28 bg-orange-100/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-orange-100/84 transition hover:border-orange-200/48 hover:bg-orange-100/[0.08] sm:w-auto sm:min-w-44">
               Cancel Move
             </button>
-            <button id="move-item-submit-button" type="submit" class="w-full border border-cyan-200/38 bg-cyan-100/[0.04] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-cyan-100 transition hover:border-cyan-100/55 hover:bg-cyan-100/[0.08] sm:w-auto sm:min-w-44">
+            <button id="move-item-submit-button" type="submit" class="w-full border border-orange-300/36 bg-orange-100/[0.05] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-orange-100 transition hover:border-orange-200/52 hover:bg-orange-100/[0.1] sm:w-auto sm:min-w-44">
               Move Item
             </button>
           </div>
@@ -665,6 +646,129 @@
               </button>
             </div>
             <video id="video-preview-player" class="max-h-[78vh] w-full bg-black" controls autoplay playsinline preload="metadata"></video>
+          </div>
+        </div>
+      </div>
+
+      <div id="contribute-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
+        <div id="contribute-backdrop" class="absolute inset-0 bg-black/78 backdrop-blur-sm"></div>
+
+        <div class="relative w-full max-w-4xl border border-white/12 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.62)]">
+          <div class="flex flex-col gap-3 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+            <div class="min-w-0">
+              <p id="contribute-modal-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-100/78">
+                Add To Folder
+              </p>
+              <p id="contribute-modal-context" class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/64"></p>
+            </div>
+            <button id="contribute-close-button" type="button" class="border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]">
+              Close
+            </button>
+          </div>
+
+          <div class="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+            <div id="contribute-mode-picker" class="grid gap-3 sm:grid-cols-2">
+              <button type="button" data-action="set-contribute-mode" data-mode="upload" class="border border-white/12 bg-white/[0.03] px-4 py-4 text-left transition hover:border-white/30 hover:bg-white/[0.06]">
+                <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-200">Upload Media</p>
+                <p class="mt-2 text-sm uppercase tracking-[0.14em] text-stone-200">Images and videos for this folder.</p>
+              </button>
+              <button type="button" data-action="set-contribute-mode" data-mode="text" class="border border-white/12 bg-white/[0.03] px-4 py-4 text-left transition hover:border-white/30 hover:bg-white/[0.06]">
+                <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-200">Create Text Post</p>
+                <p class="mt-2 text-sm uppercase tracking-[0.14em] text-stone-300/70">A note, caption, or story for this folder.</p>
+              </button>
+            </div>
+
+            <form id="upload-form" class="hidden space-y-4 border border-white/10 p-4">
+              <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] text-stone-300/65">
+                Upload Media
+              </p>
+
+              <label id="upload-author-mode-shell" class="hidden block">
+                <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Author Alias</span>
+                <select id="upload-author-mode-select" name="authorMode" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.16em] text-stone-100 outline-none transition focus:border-white/35"></select>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Files</span>
+                <input id="upload-files-input" name="files" type="file" multiple accept="image/*,video/*" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition file:mr-4 file:border-0 file:bg-white/8 file:px-3 file:py-2 file:font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] file:text-[0.68rem] file:uppercase file:tracking-[0.18em] file:text-stone-200 focus:border-white/35" required>
+              </label>
+
+              <label class="block">
+                <span id="upload-description-label" class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Description</span>
+                <textarea id="upload-description-input" name="description" rows="3" maxlength="800" placeholder="OPTIONAL DESCRIPTION..." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35"></textarea>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                <button type="button" data-action="show-contribute-menu" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] sm:w-auto sm:min-w-40">
+                  Back
+                </button>
+                <button type="submit" class="w-full border border-white/12 bg-white/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08] sm:w-auto sm:min-w-52">
+                  Upload Selected Files
+                </button>
+              </div>
+            </form>
+
+            <section id="upload-queue-panel" class="hidden border border-white/10 bg-white/[0.03] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)] sm:p-5">
+              <div class="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                <p id="upload-queue-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] text-stone-100/78">
+                  Upload Queue
+                </p>
+                <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.2em] text-stone-300/62">
+                  Live
+                </span>
+              </div>
+              <div id="upload-status-list" class="mt-4 space-y-2"></div>
+            </section>
+
+            <form id="text-post-form" class="hidden space-y-4 border border-white/10 p-4">
+              <p id="text-post-form-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.28em] text-stone-300/65">
+                New Text Post
+              </p>
+
+              <label id="text-author-mode-shell" class="hidden block">
+                <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Author Alias</span>
+                <select id="text-author-mode-select" name="authorMode" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.16em] text-stone-100 outline-none transition focus:border-white/35"></select>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Post title</span>
+                <input id="text-title-input" name="title" maxlength="60" placeholder="DAY NOTES" class="w-full border border-white/12 bg-black/40 px-3 py-3 text-sm uppercase tracking-[0.14em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required>
+              </label>
+
+              <label class="block">
+                <span class="mb-2 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.22em] text-stone-300/70">Body</span>
+                <textarea id="text-body-input" name="body" rows="5" maxlength="8000" placeholder="POST BODY..." class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 text-sm tracking-[0.08em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35" required></textarea>
+              </label>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                <button type="button" data-action="show-contribute-menu" class="w-full border border-white/12 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] sm:w-auto sm:min-w-40">
+                  Back
+                </button>
+                <button id="text-post-submit-button" type="submit" class="w-full border border-white/12 bg-white/[0.03] px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08] sm:w-auto sm:min-w-44">
+                  Add Text Post
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div id="text-preview-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-6">
+        <div id="text-preview-backdrop" class="absolute inset-0 bg-black/78 backdrop-blur-sm"></div>
+
+        <div class="relative w-full max-w-3xl border border-white/12 bg-neutral-950 shadow-[0_24px_96px_rgba(0,0,0,0.62)]">
+          <div class="flex flex-col gap-3 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+            <div class="min-w-0">
+              <p id="text-preview-title" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100"></p>
+              <p id="text-preview-context" class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-stone-300/62"></p>
+            </div>
+            <button id="text-preview-close-button" type="button" class="border border-white/12 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.2em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]">
+              Close Preview
+            </button>
+          </div>
+
+          <div class="px-5 py-5 sm:px-6 sm:py-6">
+            <pre id="text-preview-body" class="max-h-[70vh] overflow-auto whitespace-pre-wrap break-words border border-white/10 bg-black/35 p-4 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-sm leading-6 text-stone-200/86"></pre>
           </div>
         </div>
       </div>

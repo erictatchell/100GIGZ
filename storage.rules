@@ -54,10 +54,15 @@ service firebase.storage {
       allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
+    match /trips/{tripSlug}/{folderSlug}/{ownerUid}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isMember() && request.auth.uid == ownerUid && isAllowedUpload();
+      allow delete: if isSignedIn() && (request.auth.uid == ownerUid || isAdmin());
+    }
+
     match /trips/{tripSlug}/{allPaths=**} {
       allow read: if true;
-      allow create, update: if isMember() && isAllowedUpload();
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
