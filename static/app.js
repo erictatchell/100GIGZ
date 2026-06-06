@@ -2481,7 +2481,7 @@ async function handleUploadSubmit(event) {
   const oversizedVideo = files.find(
     (file) => isVideoFile(file) && Number(file.size || 0) > MAX_VIDEO_SIZE_BYTES
   );
-  if (oversizedVideo) {
+  if (oversizedVideo && !isAdmin()) {
     authDetail.textContent = `${oversizedVideo.name.toUpperCase()} / ${STRINGS.uploads.maxVideoSize}`;
     return;
   }
