@@ -6247,7 +6247,7 @@ function getHighlightButtonStyle(isSelected = false) {
 }
 
 function getFocusedFolderButtonStyle() {
-  return "box-shadow:inset 0 0 0 2px rgba(0,0,0,0.86),inset 0 0 0 3px rgba(255,255,255,0.16),0 0 18px rgba(255,255,255,0.1);";
+  return "box-shadow:inset 0 0 0 3px rgba(0,0,0,0.86),inset 0 0 0 3px rgba(255,255,255,0.16),0 0 18px rgba(255,255,255,0.1);";
 }
 
 function getHighlightFolderButtonStyle(isSelected = false) {
@@ -6255,7 +6255,7 @@ function getHighlightFolderButtonStyle(isSelected = false) {
     return getHighlightButtonStyle(false);
   }
 
-  return "border-color:transparent;background-image:linear-gradient(135deg,#fff8cb 0%,#ffe57c 32%,#ffc93a 66%,#b77800 100%),linear-gradient(135deg,#fff7be 0%,#ffe063 34%,#ffc021 68%,#7f5000 100%);background-origin:border-box;background-clip:padding-box,border-box;box-shadow:inset 0 0 0 2px rgba(0,0,0,0.86),inset 0 0 0 3px rgba(255,248,203,0.22),0 0 22px rgba(255,199,58,0.18);";
+  return "border-color:transparent;background-image:linear-gradient(135deg,#fff8cb 0%,#ffe57c 32%,#ffc93a 66%,#b77800 100%),linear-gradient(135deg,#fff7be 0%,#ffe063 34%,#ffc021 68%,#7f5000 100%);background-origin:border-box;background-clip:padding-box,border-box;box-shadow:inset 0 0 0 3px rgba(0,0,0,0.86),inset 0 0 0 3px rgba(255,248,203,0.22),0 0 22px rgba(255,199,58,0.18);";
 }
 
 function getHighlightPanelStyle() {
