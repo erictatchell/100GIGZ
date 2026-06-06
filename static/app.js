@@ -4396,19 +4396,19 @@ function renderFooterTicker() {
   const tickerText = buildFooterTickerText();
   const repeatCount = 6;
   footerTickerTrack.style.setProperty("--ticker-shift", `${100 / repeatCount}%`);
-  footerTickerTrack.innerHTML = Array.from({ length: repeatCount }, (_, index) => `
-    <span class="site-footer-ticker-segment"${index === 0 ? "" : ' aria-hidden="true"'}>${escapeHtml(tickerText)}</span>
-  `).join("");
+  footerTickerTrack.innerHTML = Array.from({ length: repeatCount }, (_, index) =>
+    `<span class="site-footer-ticker-segment"${index === 0 ? "" : ' aria-hidden="true"'}>${escapeHtml(tickerText)}</span>`
+  ).join("");
 }
 
 function buildFooterTickerText() {
   if (trips.length === 0) {
-    return "100GIGZ - ARCHIVE - LOADING";
+    return "100GIGZ - ARCHIVE - LOADING -\u00A0";
   }
 
-  return trips
+  return `${trips
     .map((trip) => String(trip.label || trip.slug || "TRIP").toUpperCase())
-    .join(" - ");
+    .join(" - ")} -\u00A0`;
 }
 
 function syncControlPanelVisibility() {
