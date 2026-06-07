@@ -61,6 +61,19 @@ const vaultForm = document.getElementById("vault-form");
 const vaultPasswordInput = document.getElementById("vault-password-input");
 const vaultSubmitButton = document.getElementById("vault-submit-button");
 const vaultStatusText = document.getElementById("vault-status");
+const vaultLegalModal = document.getElementById("vault-legal-modal");
+const vaultLegalBackdrop = document.getElementById("vault-legal-backdrop");
+const vaultLegalCloseButton = document.getElementById("vault-legal-close-button");
+const vaultLegalScrollArea = document.getElementById("vault-legal-scroll-area");
+const vaultLegalTriggers = Array.from(
+  document.querySelectorAll("[data-vault-legal-trigger]")
+);
+const vaultLegalNavButtons = Array.from(
+  document.querySelectorAll("[data-vault-legal-nav]")
+);
+const vaultLegalSections = Array.from(
+  document.querySelectorAll("[data-vault-legal-section]")
+);
 const loadingText = document.getElementById("loading-text");
 const logo = document.getElementById("logo");
 const tripList = document.getElementById("trip-list");
@@ -275,6 +288,7 @@ const ITEM_SORT_MEDIA_DATE_ASC = "media-date-asc";
 const ITEM_SORT_RECENTLY_ADDED = "recently-added";
 const FEATURED_MESSAGE_DOC_ID = "site-content";
 const DEFAULT_FEATURED_MESSAGE = STRINGS.auth.loading;
+const VAULT_LEGAL_DEFAULT_SECTION = "privacy";
 
 let runtimeConfig = null;
 let firebaseApp = null;
@@ -304,6 +318,7 @@ let mobileMenuOpen = false;
 let editPostModalOpen = false;
 let moveItemModalOpen = false;
 let videoPreviewModalOpen = false;
+let vaultLegalModalOpen = false;
 let threadModalOpen = false;
 let contributeModalOpen = false;
 let textPreviewModalOpen = false;
@@ -311,6 +326,8 @@ let currentVideoPreviewContext = null;
 let currentItemMove = null;
 let currentContributionContext = null;
 let currentTextPreviewContext = null;
+let currentVaultLegalSection = VAULT_LEGAL_DEFAULT_SECTION;
+let lastVaultLegalTrigger = null;
 let currentSocialCommentEditId = "";
 let currentWallPostEditId = "";
 let currentMediaCommentsKey = "";
@@ -355,6 +372,7 @@ const folderUnsubscribers = new Map();
 
 applyStaticStrings();
 renderFeaturedMessage();
+syncVaultLegalNav();
 startLogoGlitchLoop();
 renderAll();
 setupForms();
@@ -808,6 +826,105 @@ function hideVaultGate() {
   }, 700);
 }
 
+function setVaultLegalModalOpen(nextOpen) {
+  vaultLegalModalOpen = Boolean(nextOpen);
+
+  if (!vaultLegalModal) {
+    return;
+  }
+
+  vaultLegalModal.classList.toggle("hidden", !vaultLegalModalOpen);
+  vaultLegalModal.classList.toggle("flex", vaultLegalModalOpen);
+  vaultLegalTriggers.forEach((button) => {
+    const isExpanded =
+      vaultLegalModalOpen && Boolean(lastVaultLegalTrigger && button === lastVaultLegalTrigger);
+    button.setAttribute("aria-expanded", String(isExpanded));
+  });
+}
+
+function normalizeVaultLegalSection(section) {
+  const normalizedSection = String(section || "").trim().toLowerCase();
+
+  return vaultLegalSections.some(
+    (entry) => entry.dataset.vaultLegalSection === normalizedSection
+  )
+    ? normalizedSection
+    : VAULT_LEGAL_DEFAULT_SECTION;
+}
+
+function syncVaultLegalNav(activeSection = VAULT_LEGAL_DEFAULT_SECTION) {
+  currentVaultLegalSection = normalizeVaultLegalSection(activeSection);
+
+  vaultLegalNavButtons.forEach((button) => {
+    const isActive = button.dataset.vaultLegalNav === currentVaultLegalSection;
+    button.dataset.active = String(isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function scrollVaultLegalSectionIntoView(section, behavior = "smooth") {
+  const targetSection = vaultLegalSections.find(
+    (entry) => entry.dataset.vaultLegalSection === normalizeVaultLegalSection(section)
+  );
+
+  if (!targetSection) {
+    return;
+  }
+
+  currentVaultLegalSection = targetSection.dataset.vaultLegalSection || VAULT_LEGAL_DEFAULT_SECTION;
+  syncVaultLegalNav(currentVaultLegalSection);
+
+  if (!vaultLegalScrollArea) {
+    targetSection.scrollIntoView({ behavior, block: "start" });
+    return;
+  }
+
+  if (behavior === "auto") {
+    vaultLegalScrollArea.scrollTop = Math.max(targetSection.offsetTop - 8, 0);
+    return;
+  }
+
+  vaultLegalScrollArea.scrollTo({
+    top: Math.max(targetSection.offsetTop - 8, 0),
+    behavior,
+  });
+}
+
+function openVaultLegalModal(section, trigger = null) {
+  lastVaultLegalTrigger = trigger || null;
+  currentVaultLegalSection = normalizeVaultLegalSection(section);
+  setVaultLegalModalOpen(true);
+  syncVaultLegalNav(currentVaultLegalSection);
+
+  window.requestAnimationFrame(() => {
+    scrollVaultLegalSectionIntoView(currentVaultLegalSection, "auto");
+    vaultLegalCloseButton?.focus();
+  });
+}
+
+function closeVaultLegalModal({ restoreFocus = true } = {}) {
+  const triggerToRestore = lastVaultLegalTrigger;
+  setVaultLegalModalOpen(false);
+  lastVaultLegalTrigger = null;
+
+  if (restoreFocus) {
+    triggerToRestore?.focus();
+  }
+}
+
+function handleVaultLegalTriggerClick(event) {
+  event.preventDefault();
+  openVaultLegalModal(
+    event.currentTarget?.dataset.vaultLegalTrigger,
+    event.currentTarget
+  );
+}
+
+function handleVaultLegalNavClick(event) {
+  event.preventDefault();
+  scrollVaultLegalSectionIntoView(event.currentTarget?.dataset.vaultLegalNav);
+}
+
 function setVaultFormEnabled(enabled) {
   vaultPasswordInput?.toggleAttribute("disabled", !enabled);
   vaultSubmitButton?.toggleAttribute("disabled", !enabled);
@@ -888,6 +1005,7 @@ async function handleVaultSubmit(event) {
       vaultPasswordInput.value = "";
     }
 
+    closeVaultLegalModal({ restoreFocus: false });
     revealSiteShell();
     hideVaultGate();
     renderAll();
@@ -1082,6 +1200,14 @@ function initializeTripBrowserEvents() {
 
 function setupForms() {
   vaultForm?.addEventListener("submit", handleVaultSubmit);
+  vaultLegalTriggers.forEach((button) => {
+    button.addEventListener("click", handleVaultLegalTriggerClick);
+  });
+  vaultLegalNavButtons.forEach((button) => {
+    button.addEventListener("click", handleVaultLegalNavClick);
+  });
+  vaultLegalCloseButton?.addEventListener("click", () => closeVaultLegalModal());
+  vaultLegalBackdrop?.addEventListener("click", () => closeVaultLegalModal());
   featuredMessageForm?.addEventListener("submit", handleFeaturedMessageSubmit);
   tripForm?.addEventListener("submit", handleTripSubmit);
   folderForm?.addEventListener("submit", handleFolderSubmit);
@@ -1161,6 +1287,11 @@ function handleMobileMenuToggleClick() {
 }
 
 function handleWindowKeydown(event) {
+  if (vaultLegalModalOpen && event.key === "Escape") {
+    closeVaultLegalModal();
+    return;
+  }
+
   if (textPreviewModalOpen && event.key === "Escape") {
     resetTextPreview();
     return;

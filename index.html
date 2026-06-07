@@ -213,6 +213,43 @@
       flex-shrink: 0;
     }
 
+    .vault-legal-trigger,
+    .vault-legal-nav {
+      transition:
+        color 180ms ease,
+        border-color 180ms ease,
+        background-color 180ms ease,
+        opacity 180ms ease;
+    }
+
+    .vault-legal-trigger:hover,
+    .vault-legal-trigger:focus-visible,
+    .vault-legal-nav:hover,
+    .vault-legal-nav:focus-visible {
+      color: rgba(245, 245, 244, 0.96);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .vault-legal-nav[data-active="true"] {
+      color: rgba(245, 245, 244, 0.96);
+      border-color: rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .vault-legal-copy a {
+      color: rgba(245, 245, 244, 0.86);
+      text-decoration: underline;
+      text-decoration-color: rgba(245, 245, 244, 0.35);
+      text-underline-offset: 0.22em;
+      transition: color 180ms ease, text-decoration-color 180ms ease;
+    }
+
+    .vault-legal-copy a:hover,
+    .vault-legal-copy a:focus-visible {
+      color: rgba(255, 255, 255, 0.98);
+      text-decoration-color: rgba(255, 255, 255, 0.7);
+    }
+
     .highlight-folder-button {
       position: relative;
       transform: translate3d(0, 0, 0);
@@ -323,17 +360,158 @@
     <div aria-hidden="true" class="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.08),transparent_22%,rgba(0,0,0,0.2)_78%,rgba(0,0,0,0.38))]"></div>
 
     <div class="absolute inset-x-0 bottom-10 z-10 flex justify-center px-4 sm:bottom-12">
-      <div class="w-full max-w-md">
+      <div class="w-full max-w-xl">
         <p id="vault-status" class="mb-3 hidden text-center font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.24em] text-stone-100/78"></p>
-        <form id="vault-form" class="flex items-stretch justify-center gap-2">
+        <form id="vault-form" class="mx-auto flex max-w-md items-stretch justify-center gap-2">
           <input id="vault-password-input" name="password" type="password" autocomplete="current-password" class="min-w-0 flex-1 border border-white/18 bg-black/14 px-4 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] tracking-[0.18em] text-stone-100 outline-none backdrop-blur-[1px] transition placeholder:text-stone-200/52 focus:border-white/32" placeholder="KEY" required>
           <button id="vault-submit-button" type="submit" class="shrink-0 border border-white/18 bg-black/14 px-6 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.18em] text-stone-100 backdrop-blur-[1px] transition hover:border-white/32 hover:bg-white/[0.04]">
             Unlock
           </button>
         </form>
+        <div class="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-white/10 pt-3">
+          <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.52rem] uppercase tracking-[0.3em] text-stone-400/42">Site Info</span>
+          <button type="button" data-vault-legal-trigger="privacy" aria-haspopup="dialog" aria-controls="vault-legal-modal" class="vault-legal-trigger border-b border-transparent bg-transparent px-0 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.2em] text-stone-300/62">
+            Privacy
+          </button>
+          <button type="button" data-vault-legal-trigger="terms" aria-haspopup="dialog" aria-controls="vault-legal-modal" class="vault-legal-trigger border-b border-transparent bg-transparent px-0 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.2em] text-stone-300/62">
+            Terms
+          </button>
+          <button type="button" data-vault-legal-trigger="contact" aria-haspopup="dialog" aria-controls="vault-legal-modal" class="vault-legal-trigger border-b border-transparent bg-transparent px-0 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.2em] text-stone-300/62">
+            Contact
+          </button>
+          <button type="button" data-vault-legal-trigger="compliance" aria-haspopup="dialog" aria-controls="vault-legal-modal" class="vault-legal-trigger border-b border-transparent bg-transparent px-0 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.2em] text-stone-300/62">
+            Compliance
+          </button>
+        </div>
+        <p class="mt-2 text-center font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] tracking-[0.18em] text-stone-400/38">
+          Google sign-in, privacy, terms, and data-use details are available before access.
+        </p>
       </div>
     </div>
   </section>
+
+  <div id="vault-legal-modal" class="fixed inset-0 z-[65] hidden items-end justify-center p-2 sm:items-center sm:p-6">
+    <button id="vault-legal-backdrop" type="button" tabindex="-1" aria-label="Close policy panel" class="absolute inset-0 bg-black/72 backdrop-blur-[2px]"></button>
+
+    <section role="dialog" aria-modal="true" aria-labelledby="vault-legal-modal-title" class="relative flex w-full max-w-4xl max-h-[calc(100vh-1rem)] flex-col overflow-hidden border border-white/12 bg-[linear-gradient(to_bottom,rgba(18,18,18,0.96),rgba(6,6,6,0.99))] shadow-[0_24px_96px_rgba(0,0,0,0.62)] sm:max-h-[calc(100vh-3rem)]">
+      <div class="border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.28em] text-stone-300/62">
+              100GIGZ Access Details
+            </p>
+            <h2 id="vault-legal-modal-title" class="mt-2 font-['Teko',sans-serif] text-[2rem] uppercase leading-[0.85] tracking-[0.1em] text-stone-100 sm:text-[2.4rem]">
+              Policies, Contact, and Google Data Use
+            </h2>
+            <p class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-400/58">
+              Last updated June 7, 2026
+            </p>
+          </div>
+
+          <button id="vault-legal-close-button" type="button" class="shrink-0 border border-white/12 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.2em] text-stone-100 transition hover:border-white/28 hover:bg-white/[0.08]">
+            Close
+          </button>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button type="button" data-vault-legal-nav="privacy" class="vault-legal-nav border border-white/10 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.6rem] uppercase tracking-[0.2em] text-stone-300/72">
+            Privacy
+          </button>
+          <button type="button" data-vault-legal-nav="terms" class="vault-legal-nav border border-white/10 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.6rem] uppercase tracking-[0.2em] text-stone-300/72">
+            Terms
+          </button>
+          <button type="button" data-vault-legal-nav="contact" class="vault-legal-nav border border-white/10 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.6rem] uppercase tracking-[0.2em] text-stone-300/72">
+            Contact
+          </button>
+          <button type="button" data-vault-legal-nav="compliance" class="vault-legal-nav border border-white/10 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.6rem] uppercase tracking-[0.2em] text-stone-300/72">
+            Compliance
+          </button>
+        </div>
+      </div>
+
+      <div id="vault-legal-scroll-area" class="vault-legal-copy space-y-8 overflow-y-auto px-4 py-4 text-sm leading-6 text-stone-200/84 sm:px-6 sm:py-5">
+        <section data-vault-legal-section="privacy" class="space-y-4 border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+          <div>
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.24em] text-stone-400/60">
+              Privacy Policy
+            </p>
+            <h3 class="mt-2 font-['Teko',sans-serif] text-[1.5rem] uppercase leading-none tracking-[0.08em] text-stone-100">
+              What 100GIGZ Collects and Why
+            </h3>
+          </div>
+          <p>
+            100GIGZ is a private archive experience. If you use Google sign-in, the site may receive the basic Google account details you authorize, including your email address, profile name, and profile photo.
+          </p>
+          <p>
+            The site also stores the content you choose to create or upload, such as archive posts, profile details, comments, and media files. That information is used only to authenticate access, display member identity, manage archive permissions, and operate storage and moderation inside the service.
+          </p>
+          <p>
+            Content shared inside the archive may be visible to other authorized users with access to the same areas. 100GIGZ does not sell personal information and does not use Google user data for advertising.
+          </p>
+          <p>
+            Account records and uploaded content are processed through Google Firebase services used to run the site. If you want to request access, correction, or deletion of your information, email <a href="mailto:erictatch@gmail.com?subject=100GIGZ%20privacy%20request">erictatch@gmail.com</a>.
+          </p>
+        </section>
+
+        <section data-vault-legal-section="terms" class="space-y-4 border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+          <div>
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.24em] text-stone-400/60">
+              Terms of Use
+            </p>
+            <h3 class="mt-2 font-['Teko',sans-serif] text-[1.5rem] uppercase leading-none tracking-[0.08em] text-stone-100">
+              Basic Rules for Access
+            </h3>
+          </div>
+          <p>
+            By using 100GIGZ, you agree to use the site only for lawful access to the archive and only with credentials or invitations intended for you.
+          </p>
+          <p>
+            You are responsible for the content you upload or post. Only share media, names, and materials that you own or are allowed to distribute, and do not attempt to bypass the vault, abuse member access, or interfere with the service.
+          </p>
+          <p>
+            Access may be suspended or removed at any time to protect the archive, other members, or the platform. The service is provided on an as-available basis without guarantees of uninterrupted availability.
+          </p>
+        </section>
+
+        <section data-vault-legal-section="contact" class="space-y-4 border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+          <div>
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.24em] text-stone-400/60">
+              Contact
+            </p>
+            <h3 class="mt-2 font-['Teko',sans-serif] text-[1.5rem] uppercase leading-none tracking-[0.08em] text-stone-100">
+              Questions, Privacy Requests, and Support
+            </h3>
+          </div>
+          <p>
+            For support, account questions, privacy requests, or Google sign-in compliance questions, contact <a href="mailto:erictatch@gmail.com">erictatch@gmail.com</a>.
+          </p>
+          <p>
+            Deletion and access requests can be sent directly by email with the subject line that best matches your need, including <a href="mailto:erictatch@gmail.com?subject=100GIGZ%20data%20deletion%20request">data deletion request</a> or <a href="mailto:erictatch@gmail.com?subject=100GIGZ%20account%20support">account support</a>.
+          </p>
+        </section>
+
+        <section data-vault-legal-section="compliance" class="space-y-4 border border-white/10 bg-white/[0.02] p-4 sm:p-5">
+          <div>
+            <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.24em] text-stone-400/60">
+              Google Compliance
+            </p>
+            <h3 class="mt-2 font-['Teko',sans-serif] text-[1.5rem] uppercase leading-none tracking-[0.08em] text-stone-100">
+              How Google Account Data Is Used
+            </h3>
+          </div>
+          <p>
+            Google sign-in is used only to verify identity and support account access inside 100GIGZ. The site uses the basic account identity information needed for authentication and profile display, including standard email and profile details provided through Google and Firebase Authentication.
+          </p>
+          <p>
+            100GIGZ does not request access to Gmail, Google Drive, Google Photos, or other broad Google data sets. Google account information obtained through sign-in is not sold, not used for advertising, and not shared except as needed to operate the site infrastructure and authorized member experience.
+          </p>
+          <p>
+            The service uses layered access controls including the vault password, authenticated user access, and Firebase-backed data rules. Questions about Google data use or compliance can be sent to <a href="mailto:erictatch@gmail.com?subject=100GIGZ%20Google%20compliance">erictatch@gmail.com</a>.
+          </p>
+        </section>
+      </div>
+    </section>
+  </div>
 
   <main id="site-shell" aria-hidden="true" class="pointer-events-none relative m-2 min-h-[calc(100vh-1rem)] overflow-x-clip border border-white/10 bg-black/80 px-4 py-4 opacity-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.025),0_0_80px_rgba(255,255,255,0.08)] transition-opacity duration-700 sm:m-4 sm:min-h-[calc(100vh-2rem)] sm:px-6 sm:py-5 md:px-10 md:py-7 lg:overflow-x-visible lg:px-14 lg:py-9">
     <div aria-hidden="true" class="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent_24%)]"></div>
