@@ -1269,7 +1269,19 @@
               <img id="video-preview-image" alt="" class="hidden max-h-[58vh] w-full bg-black object-contain">
             </div>
 
-            <div class="mt-3 space-y-2">
+<section class="mt-4 border border-white/10 bg-black/24 p-3 sm:p-4">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div id="video-preview-social-summary" class="flex min-h-[2.25rem] flex-wrap items-center gap-1.5"></div>
+                <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                  <button id="video-preview-like-button" type="button" class="w-full shrink-0 border border-white/12 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto">
+                    Like
+                  </button>
+                  
+                </div>
+              </div>
+            </section>
+
+            <div class=" space-y-2">
               <p id="video-preview-up-next" class="min-h-[1rem] font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-400/72"></p>
               <label id="video-preview-autoplay-control" class="flex items-center justify-between gap-3 border border-white/10 bg-black/22 px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-200/82 sm:inline-flex sm:min-w-[18rem]">
                 <span>Autoplay</span>
@@ -1280,6 +1292,7 @@
                 </span>
               </label>
             </div>
+
 
             <section class="mt-4 border border-white/10 bg-black/22 p-3 sm:p-4">
               <div class="flex items-center justify-end">
@@ -1298,20 +1311,15 @@
               </div>
             </section>
 
-            <section class="mt-4 border border-white/10 bg-black/24 p-3 sm:p-4">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div id="video-preview-social-summary" class="flex min-h-[2.25rem] flex-wrap items-center gap-1.5"></div>
+           <section class="mt-4 border border-white/10 bg-black/24 p-3 sm:p-4">
                 <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                  <button id="video-preview-like-button" type="button" class="w-full shrink-0 border border-white/12 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto">
-                    Like
-                  </button>
                   <button id="video-preview-comment-toggle-button" type="button" class="w-full shrink-0 border border-white/12 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto">
                     Comment
                   </button>
                 </div>
-              </div>
-            </section>
+            </section> 
 
+            <div class="pb-12">
             <section class="mt-4 border border-white/10 bg-black/28 p-3 sm:p-4">
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.22em] text-stone-300/70">
@@ -1353,6 +1361,7 @@
                 </div>
               </form>
             </section>
+          </div>
           </div>
 
         </div>
