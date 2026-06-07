@@ -9,6 +9,7 @@ import {
 import {
   collectionGroup,
   collection,
+  deleteField,
   deleteDoc,
   doc,
   getDoc,
@@ -150,6 +151,7 @@ const profileCurrentImageLabel = document.getElementById("profile-current-image-
 const profileDetailsForm = document.getElementById("profile-details-form");
 const profileDisplayNameInput = document.getElementById("profile-display-name-input");
 const profileRouteInput = document.getElementById("profile-route-input");
+const profileRouteField = document.getElementById("profile-route-field");
 const profileDetailsSubmit = document.getElementById("profile-details-submit");
 const profileEmptyState = document.getElementById("profile-empty-state");
 const profileTripList = document.getElementById("profile-trip-list");
@@ -217,6 +219,7 @@ const videoPreviewBackdrop = document.getElementById("video-preview-backdrop");
 const videoPreviewCloseButton = document.getElementById("video-preview-close-button");
 const videoPreviewShell = document.getElementById("video-preview-shell");
 const videoPreviewTitle = document.getElementById("video-preview-title");
+const videoPreviewSequence = document.getElementById("video-preview-sequence");
 const videoPreviewBadge = document.getElementById("video-preview-badge");
 const videoPreviewFrame = document.getElementById("video-preview-frame");
 const videoPreviewPlayer = document.getElementById("video-preview-player");
@@ -224,6 +227,8 @@ const videoPreviewImage = document.getElementById("video-preview-image");
 const videoPreviewPrevButton = document.getElementById("video-preview-prev-button");
 const videoPreviewNextButton = document.getElementById("video-preview-next-button");
 const videoPreviewCertifyButton = document.getElementById("video-preview-certify-button");
+const videoPreviewUpNext = document.getElementById("video-preview-up-next");
+const videoPreviewAutoplayToggle = document.getElementById("video-preview-autoplay-toggle");
 const videoPreviewCommentForm = document.getElementById("video-preview-comment-form");
 const videoPreviewCommentBodyInput = document.getElementById("video-preview-comment-body");
 const videoPreviewCommentImageInput = document.getElementById("video-preview-comment-image");
@@ -235,6 +240,7 @@ const videoPreviewLikeButton = document.getElementById("video-preview-like-butto
 const videoPreviewThreadShell = document.getElementById("video-preview-thread-shell");
 const videoPreviewThreadTitle = document.getElementById("video-preview-thread-title");
 const videoPreviewThreadContext = document.getElementById("video-preview-thread-context");
+const videoPreviewThreadRoot = document.getElementById("video-preview-thread-root");
 const videoPreviewThreadCloseButton = document.getElementById("video-preview-thread-close-button");
 const videoPreviewThreadStatus = document.getElementById("video-preview-thread-status");
 const videoPreviewThreadList = document.getElementById("video-preview-thread-list");
@@ -271,6 +277,12 @@ const featuredMessageFormTitle = document.getElementById("featured-message-form-
 const featuredMessageInputLabel = document.getElementById("featured-message-input-label");
 const featuredMessageInput = document.getElementById("featured-message-input");
 const featuredMessageSubmit = document.getElementById("featured-message-submit");
+const featuredClipShell = document.getElementById("featured-clip-shell");
+const featuredClipOpenButton = document.getElementById("featured-clip-open-button");
+const featuredClipImage = document.getElementById("featured-clip-image");
+const featuredClipTitle = document.getElementById("featured-clip-title");
+const featuredClipContext = document.getElementById("featured-clip-context");
+const featuredClipDescription = document.getElementById("featured-clip-description");
 const DEFAULT_PROFILE_IMAGE_URL = "/static/default-profile.svg";
 const ROLE_FRIEND = "friend";
 const ROLE_ADMIN = "admin";
@@ -288,7 +300,11 @@ const HIGHLIGHT_FOLDER_ID = slugifyFolder(HIGHLIGHT_FOLDER_LABEL);
 const MAX_VIDEO_UPLOADS_PER_DAY = 10;
 const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 const MAX_PROFILE_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_TRIP_COVER_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_SOCIAL_BODY_LENGTH = 600;
+const AUTOPLAY_IMAGE_DURATION_MS = 4000;
+const RECENT_MEDIA_VIEW_WINDOW_MS = 3 * 60 * 60 * 1000;
+const RECENT_MEDIA_VIEW_STORAGE_KEY = "100gigz-recent-media-views";
 const ITEM_SORT_MEDIA_DATE_DESC = "media-date-desc";
 const ITEM_SORT_MEDIA_DATE_ASC = "media-date-asc";
 const ITEM_SORT_RECENTLY_ADDED = "recently-added";
@@ -361,6 +377,10 @@ let likeActorsByTargetKey = new Map();
 let interactionRefreshFrame = 0;
 let currentRoute = normalizeRoute(window.location.pathname);
 let featuredMessage = DEFAULT_FEATURED_MESSAGE;
+let featuredClip = null;
+let videoPreviewAutoplayEnabled = false;
+let videoPreviewAutoplayTimer = 0;
+let recentMediaViews = loadRecentMediaViews();
 let vaultState = {
   configured: false,
   unlocked: false,
@@ -1140,12 +1160,16 @@ function subscribeToSiteSettings() {
     (snapshot) => {
       const data = snapshot.exists() ? snapshot.data() : null;
       featuredMessage = normalizeFeaturedMessage(data?.featuredMessage);
+      featuredClip = normalizeFeaturedClip(data?.featuredClip);
       renderFeaturedMessage();
+      renderFeaturedClip();
       syncFeaturedMessageForm();
     },
     () => {
       featuredMessage = DEFAULT_FEATURED_MESSAGE;
+      featuredClip = null;
       renderFeaturedMessage();
+      renderFeaturedClip();
       syncFeaturedMessageForm();
     }
   );
@@ -1232,9 +1256,11 @@ function setupForms() {
   moveItemBackdrop?.addEventListener("click", resetItemMoveDialog);
   videoPreviewCloseButton?.addEventListener("click", resetVideoPreview);
   videoPreviewBackdrop?.addEventListener("click", resetVideoPreview);
-  videoPreviewPrevButton?.addEventListener("click", () => navigateVideoPreview(-1));
-  videoPreviewNextButton?.addEventListener("click", () => navigateVideoPreview(1));
+  videoPreviewPrevButton?.addEventListener("click", () => navigateVideoPreview(-1, { manual: true }));
+  videoPreviewNextButton?.addEventListener("click", () => navigateVideoPreview(1, { manual: true }));
   videoPreviewCertifyButton?.addEventListener("click", handleVideoPreviewCertifiedToggleClick);
+  videoPreviewAutoplayToggle?.addEventListener("change", handleVideoPreviewAutoplayToggleChange);
+  videoPreviewPlayer?.addEventListener("ended", handleVideoPreviewPlayerEnded);
   videoPreviewLikeButton?.addEventListener("click", handleMediaItemLikeButtonClick);
   videoPreviewCommentForm?.addEventListener("submit", handleVideoPreviewCommentSubmit);
   videoPreviewCommentsList?.addEventListener("click", handleSocialCommentActionClick);
@@ -1278,6 +1304,7 @@ function setupForms() {
   friendsDesktopList?.addEventListener("keydown", handleProfileCardKeydown);
   friendsMobileList?.addEventListener("keydown", handleProfileCardKeydown);
   friendsMobileInlineList?.addEventListener("keydown", handleProfileCardKeydown);
+  featuredClipOpenButton?.addEventListener("click", handleFeaturedClipOpenClick);
   document.addEventListener("click", handleDocumentRouteLinkClick);
   window.addEventListener("scroll", syncScrollBannerVisibility, { passive: true });
   window.addEventListener("resize", syncResponsivePanels);
@@ -1319,13 +1346,13 @@ function handleWindowKeydown(event) {
 
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      navigateVideoPreview(-1);
+      navigateVideoPreview(-1, { manual: true });
       return;
     }
 
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      navigateVideoPreview(1);
+      navigateVideoPreview(1, { manual: true });
       return;
     }
   }
@@ -2104,6 +2131,100 @@ async function handleProfileImageSubmit(event) {
     authDetail.textContent = getFriendlyStorageMessage(error);
   } finally {
     profileImageSubmit?.toggleAttribute("disabled", false);
+  }
+}
+
+async function handleTripCoverUploadInputChange(input) {
+  if (!db || !storage || !storageReady || !isAdminViewEnabled()) {
+    authDetail.textContent = STRINGS.uploads.storageNotReady;
+    if (input) {
+      input.value = "";
+    }
+    return;
+  }
+
+  const tripId = String(input?.getAttribute("data-trip-id") || "");
+  const file = input?.files?.[0] || null;
+  const tripIndex = trips.findIndex((entry) => entry.id === tripId);
+  const trip = tripIndex >= 0 ? trips[tripIndex] : null;
+
+  if (!trip || !file) {
+    return;
+  }
+
+  if (!isSupportedProfileImage(file)) {
+    authDetail.textContent = STRINGS.firebase.profileImageType;
+    input.value = "";
+    return;
+  }
+
+  if (file.size > MAX_TRIP_COVER_IMAGE_SIZE_BYTES) {
+    authDetail.textContent = STRINGS.firebase.profileImageSize;
+    input.value = "";
+    return;
+  }
+
+  const extension = getFileExtension(file.name) || "jpg";
+  const storagePath = `trip-covers/${trip.id}/cover-${buildUniqueStamp()}.${extension}`;
+  const nextImageRef = storageRef(storage, storagePath);
+  const previousPath = String(trip.coverImageStoragePath || "");
+
+  input.toggleAttribute("disabled", true);
+  authDetail.textContent = `UPLOADING ${trip.slug.toUpperCase()} CARD IMAGE.`;
+
+  try {
+    const task = uploadBytesResumable(nextImageRef, file, {
+      contentType: file.type || "image/jpeg",
+    });
+
+    await new Promise((resolve, reject) => {
+      task.on("state_changed", null, reject, resolve);
+    });
+
+    const downloadURL = await getDownloadURL(task.snapshot.ref);
+
+    await setDoc(
+      doc(db, runtimeConfig.collections.trips, trip.id),
+      {
+        coverImageURL: downloadURL,
+        coverImageStoragePath: storagePath,
+        updatedAt: serverTimestamp(),
+        updatedByUid: currentUser?.uid || "",
+        updatedByEmail: currentUser?.email || "",
+      },
+      { merge: true }
+    );
+
+    if (previousPath && previousPath !== storagePath) {
+      try {
+        await deleteObject(storageRef(storage, previousPath));
+      } catch (error) {
+        if (!isStorageObjectMissing(error)) {
+          throw error;
+        }
+      }
+    }
+
+    trips = trips.map((entry, index) =>
+      entry.id === trip.id
+        ? normalizeTrip(
+            {
+              ...entry,
+              coverImageURL: downloadURL,
+              coverImageStoragePath: storagePath,
+            },
+            index
+          )
+        : entry
+    );
+
+    renderAll();
+    authDetail.textContent = `${trip.slug.toUpperCase()} CARD IMAGE UPDATED.`;
+  } catch (error) {
+    authDetail.textContent = getFriendlyStorageMessage(error);
+  } finally {
+    input.toggleAttribute("disabled", false);
+    input.value = "";
   }
 }
 
@@ -3118,7 +3239,7 @@ function subscribeToMediaCommentAggregates() {
       snapshot.docs.forEach((commentDoc) => {
         const comment = normalizeMediaComment({ id: commentDoc.id, ...commentDoc.data() });
         const itemKey = buildMediaItemKey(comment.tripId, comment.folderId, comment.itemId);
-        const threadKey = buildThreadKey(comment.authorUid, comment.id);
+        const threadKey = buildThreadKey(getThreadOwnerUid(comment), comment.id);
 
         if (itemKey) {
           nextCommentCountsByItemKey.set(
@@ -3439,32 +3560,88 @@ async function syncUserRecord(user) {
 async function handleProfileDetailsSubmit(event) {
   event.preventDefault();
 
-  if (!db || !currentUser?.uid || !currentUserProfile) {
+  const profileView = getActiveProfileView();
+  const targetFriend = profileView?.state === "ready" ? profileView.friend : null;
+  const isEditingSelf = Boolean(targetFriend?.uid && targetFriend.uid === currentUser?.uid);
+  const canAdminEditOtherProfile = Boolean(
+    targetFriend?.uid &&
+      !isEditingSelf &&
+      isAdminViewEnabled()
+  );
+
+  if (!db || !currentUser?.uid || !targetFriend?.uid || (!isEditingSelf && !canAdminEditOtherProfile)) {
     authDetail.textContent = STRINGS.profile.signInRequired;
     return;
   }
 
   const nextDisplayName = normalizeDisplayName(profileDisplayNameInput?.value);
-  const requestedRouteId = normalizeRouteId(profileRouteInput?.value);
+  let routeId = normalizeRouteId(targetFriend.routeId);
 
-  if (!isValidRouteId(requestedRouteId)) {
-    authDetail.textContent = STRINGS.profile.routeInvalid;
-    return;
-  }
+  if (isEditingSelf) {
+    const requestedRouteId = normalizeRouteId(profileRouteInput?.value);
 
-  const routeId = await ensureUniqueRouteId(requestedRouteId, currentUser.uid);
+    if (!isValidRouteId(requestedRouteId)) {
+      authDetail.textContent = STRINGS.profile.routeInvalid;
+      return;
+    }
 
-  if (routeId !== requestedRouteId) {
-    authDetail.textContent = STRINGS.profile.routeTaken;
-    return;
+    routeId = await ensureUniqueRouteId(requestedRouteId, currentUser.uid);
+
+    if (routeId !== requestedRouteId) {
+      authDetail.textContent = STRINGS.profile.routeTaken;
+      return;
+    }
   }
 
   profileDetailsSubmit?.toggleAttribute("disabled", true);
 
   try {
     await setDoc(
-      doc(db, runtimeConfig.collections.users, currentUser.uid),
+      doc(db, runtimeConfig.collections.users, targetFriend.uid),
       {
+        uid: targetFriend.uid,
+        email: targetFriend.email || "",
+        displayName: nextDisplayName,
+        googleName: normalizePersonName(
+          targetFriend.googleName ||
+            getFriendGoogleName(targetFriend)
+        ),
+        routeId,
+        photoURL: targetFriend.photoStoragePath ? targetFriend.photoURL || "" : "",
+        photoStoragePath: targetFriend.photoStoragePath || "",
+        role: targetFriend.role || ROLE_FRIEND,
+        isAdmin: isElevatedRole(targetFriend.role || ROLE_FRIEND),
+        updatedAt: serverTimestamp(),
+        updatedByUid: currentUser.uid,
+        updatedByEmail: currentUser.email || "",
+      },
+      { merge: true }
+    );
+
+    friends = friends
+      .map((entry) =>
+        entry.uid === targetFriend.uid
+          ? normalizeFriend({
+              ...entry,
+              uid: targetFriend.uid,
+              email: targetFriend.email || "",
+              displayName: nextDisplayName,
+              googleName: normalizePersonName(
+                targetFriend.googleName ||
+                  getFriendGoogleName(targetFriend)
+              ),
+              routeId,
+              photoURL: targetFriend.photoStoragePath ? targetFriend.photoURL || "" : "",
+              photoStoragePath: targetFriend.photoStoragePath || "",
+              role: targetFriend.role || ROLE_FRIEND,
+            })
+          : entry
+      )
+      .sort(compareFriends);
+
+    if (targetFriend.uid === currentUser.uid && currentUserProfile) {
+      currentUserProfile = normalizeFriend({
+        ...currentUserProfile,
         uid: currentUser.uid,
         email: currentUser.email || "",
         displayName: nextDisplayName,
@@ -3474,29 +3651,15 @@ async function handleProfileDetailsSubmit(event) {
             inferNameFromEmail(currentUser.email)
         ),
         routeId,
-        photoURL: currentUserProfile.photoURL || "",
-        photoStoragePath: currentUserProfile.photoStoragePath || "",
-        role: getCurrentUserRole(),
-        isAdmin: isElevatedRole(getCurrentUserRole()),
-        updatedAt: serverTimestamp(),
-        updatedByUid: currentUser.uid,
-        updatedByEmail: currentUser.email || "",
-      },
-      { merge: true }
-    );
+      });
+    }
 
-    currentUserProfile = normalizeFriend({
-      ...currentUserProfile,
-      uid: currentUser.uid,
-      email: currentUser.email || "",
-      displayName: nextDisplayName,
-      googleName: normalizePersonName(
-        currentUserProfile.googleName ||
-          currentUser.displayName ||
-          inferNameFromEmail(currentUser.email)
-      ),
-      routeId,
-    });
+    if (!isEditingSelf) {
+      authDetail.textContent = `${getFriendLabel({ ...targetFriend, displayName: nextDisplayName }).toUpperCase()} DISPLAY NAME UPDATED.`;
+      profileDetailsSubmit?.toggleAttribute("disabled", false);
+      renderAll();
+      return;
+    }
 
     authDetail.textContent = STRINGS.profile.saveDone;
 
@@ -3711,6 +3874,56 @@ async function handleFeaturedMessageSubmit(event) {
     );
   } finally {
     featuredMessageSubmit?.toggleAttribute("disabled", false);
+  }
+}
+
+async function handleFeaturedClipToggleClick(trigger) {
+  if (!db || !isAdminViewEnabled()) {
+    return;
+  }
+
+  const tripId = String(trigger.getAttribute("data-trip-id") || "");
+  const folderId = String(trigger.getAttribute("data-folder-id") || "");
+  const itemId = String(trigger.getAttribute("data-item-id") || "");
+  const item = getItemsForFolder(tripId, folderId).find((entry) => entry.id === itemId) || null;
+  const sourceFolderId = resolveItemSourceFolderId(item, folderId);
+  const siteSettingsRef = getSiteSettingsRef();
+
+  if (!siteSettingsRef || !tripId || !sourceFolderId || !itemId || !item || !isVideoPreviewItem(item)) {
+    return;
+  }
+
+  const nextFeaturedClip = isFeaturedClipItem(item, tripId, sourceFolderId)
+    ? null
+    : {
+        tripId,
+        folderId: sourceFolderId,
+        itemId,
+      };
+
+  trigger.disabled = true;
+
+  try {
+    await setDoc(
+      siteSettingsRef,
+      {
+        featuredClip: nextFeaturedClip || deleteField(),
+        updatedAt: serverTimestamp(),
+        updatedByUid: currentUser?.uid || "",
+        updatedByEmail: currentUser?.email || "",
+      },
+      { merge: true }
+    );
+
+    featuredClip = normalizeFeaturedClip(nextFeaturedClip);
+    renderFeaturedClip();
+    renderVisibleRouteContent();
+    authDetail.textContent = nextFeaturedClip
+      ? `${getItemDisplayName(item).toUpperCase()} SET AS FEATURED CLIP.`
+      : "FEATURED CLIP CLEARED.";
+  } catch (error) {
+    authDetail.textContent = getErrorMessage(error, "Could not update featured clip.");
+    trigger.disabled = false;
   }
 }
 
@@ -4683,10 +4896,13 @@ function openVideoPreview(tripId, folderId, itemId, view = "archive", options = 
     return;
   }
 
+  markPreviewItemViewed(previewState);
+  syncRouteSelectionToPreview(previewState);
   syncVideoPreviewNavigation(previewState);
   syncVideoPreviewMedia(previewState);
   syncVideoPreviewComments(previewState);
   setVideoPreviewModalOpen(true);
+  schedulePreviewRowAlignment(previewState);
 
   if (isVideoPreviewItem(previewState.currentItem)) {
     window.requestAnimationFrame(() => {
@@ -4698,23 +4914,34 @@ function openVideoPreview(tripId, folderId, itemId, view = "archive", options = 
   }
 }
 
-function navigateVideoPreview(direction) {
+function navigateVideoPreview(direction, options = {}) {
   const previewState = getCurrentVideoPreviewState();
 
   if (!previewState) {
     return;
   }
 
-  const nextItem = previewState.items[previewState.currentIndex + direction];
+  if (options?.manual) {
+    setVideoPreviewAutoplayEnabled(false);
+  }
 
-  if (!nextItem) {
+  const nextEntry = previewState.sequence[previewState.currentIndex + direction];
+
+  if (!nextEntry) {
+    if (videoPreviewAutoplayEnabled) {
+      setVideoPreviewAutoplayEnabled(false);
+    }
+
     return;
   }
 
-  openVideoPreview(previewState.tripId, previewState.folderId, nextItem.id, previewState.view);
+  openVideoPreview(nextEntry.tripId, nextEntry.folderId, nextEntry.itemId, previewState.view);
 }
 
 function resetVideoPreview() {
+  const previewState = getCurrentVideoPreviewState();
+  clearVideoPreviewAutoplayTimer();
+  setVideoPreviewAutoplayEnabled(false);
   resetVideoPreviewThreadSelection();
   currentVideoPreviewContext = null;
   syncVideoPreviewNavigation(null);
@@ -4722,6 +4949,10 @@ function resetVideoPreview() {
   syncVideoPreviewComments(null);
 
   setVideoPreviewModalOpen(false);
+
+  if (previewState) {
+    schedulePreviewRowAlignment(previewState);
+  }
 }
 
 function getCurrentVideoPreviewState() {
@@ -4730,23 +4961,31 @@ function getCurrentVideoPreviewState() {
   }
 
   const { tripId, folderId, itemId, view } = currentVideoPreviewContext;
-  const items = getFolderVideoItems(tripId, folderId, view);
-  const currentIndex = items.findIndex((item) => item.id === itemId);
+  const sequence = getPreviewSequenceForView(view);
+  const currentIndex = sequence.findIndex((entry) =>
+    entry.tripId === tripId &&
+    entry.folderId === folderId &&
+    entry.itemId === itemId
+  );
 
   if (currentIndex === -1) {
     return null;
   }
 
+  const currentEntry = sequence[currentIndex];
+
   return {
-    tripId,
-    folderId,
-    itemId,
+    tripId: currentEntry.tripId,
+    folderId: currentEntry.folderId,
+    itemId: currentEntry.itemId,
     view,
     threadCommentId: String(currentVideoPreviewContext.threadCommentId || ""),
     threadOwnerUid: String(currentVideoPreviewContext.threadOwnerUid || ""),
-    items,
+    items: sequence.map((entry) => entry.item),
+    sequence,
     currentIndex,
-    currentItem: items[currentIndex],
+    currentEntry,
+    currentItem: currentEntry.item,
   };
 }
 
@@ -4764,9 +5003,174 @@ function getFolderVideoItems(tripId, folderId, view = "archive") {
   return items.filter(isPreviewableMediaItem);
 }
 
+function getPreviewSequenceForView(view = "archive") {
+  const profileView = getActiveProfileView();
+  const profileFriend = view === "profile" ? profileView?.friend || null : null;
+
+  return trips.flatMap((trip) => {
+    const folders = view === "profile" && profileFriend
+      ? getProfileFoldersForTrip(profileFriend, trip.id)
+      : getFoldersForTrip(trip.id);
+
+    return folders.flatMap((folder) =>
+      getFolderVideoItems(trip.id, folder.id, view).map((item) => ({
+        tripId: trip.id,
+        folderId: folder.id,
+        itemId: item.id,
+        item,
+        sourceFolderId: resolveItemSourceFolderId(item, folder.id),
+      }))
+    );
+  });
+}
+
+function syncRouteSelectionToPreview(previewState) {
+  if (!previewState) {
+    return;
+  }
+
+  setSelectedFolderId(previewState.tripId, previewState.folderId, previewState.view);
+
+  if (previewState.view !== "profile") {
+    if (isMobileTripLayout()) {
+      trips.forEach((trip) => {
+        expandedTrips.set(trip.id, trip.id === previewState.tripId);
+      });
+    } else {
+      expandedTrips.set(previewState.tripId, true);
+    }
+  }
+
+  renderVisibleRouteContent();
+}
+
+function schedulePreviewRowAlignment(previewState = getCurrentVideoPreviewState()) {
+  if (!previewState?.tripId || !previewState?.folderId || !previewState?.itemId) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    scrollPreviewRowIntoView(previewState);
+  });
+}
+
+function scrollPreviewRowIntoView(previewState = getCurrentVideoPreviewState()) {
+  if (!previewState?.tripId || !previewState?.folderId || !previewState?.itemId) {
+    return;
+  }
+
+  const selector = [
+    '[data-preview-row="true"]',
+    `[data-view="${escapeCssSelectorToken(previewState.view)}"]`,
+    `[data-trip-id="${escapeCssSelectorToken(previewState.tripId)}"]`,
+    `[data-folder-id="${escapeCssSelectorToken(previewState.folderId)}"]`,
+    `[data-item-id="${escapeCssSelectorToken(previewState.itemId)}"]`,
+  ].join("");
+  const rows = Array.from(document.querySelectorAll(selector));
+  const row = rows.find((entry) => entry.getClientRects().length > 0) || rows[0] || null;
+
+  if (!row || typeof row.scrollIntoView !== "function") {
+    return;
+  }
+
+  row.scrollIntoView({ block: "center", inline: "nearest" });
+}
+
+function markPreviewItemViewed(previewState) {
+  const nextKey = buildRecentMediaViewKey(
+    previewState?.currentItem,
+    previewState?.tripId,
+    previewState?.folderId
+  );
+
+  if (!nextKey) {
+    return;
+  }
+
+  recentMediaViews = pruneRecentMediaViews({
+    ...recentMediaViews,
+    [nextKey]: Date.now(),
+  });
+  persistRecentMediaViews(recentMediaViews);
+}
+
+function handleVideoPreviewAutoplayToggleChange(event) {
+  setVideoPreviewAutoplayEnabled(Boolean(event.currentTarget?.checked));
+}
+
+function handleVideoPreviewPlayerEnded() {
+  if (!videoPreviewAutoplayEnabled) {
+    return;
+  }
+
+  navigateVideoPreview(1);
+}
+
+function clearVideoPreviewAutoplayTimer() {
+  if (!videoPreviewAutoplayTimer) {
+    return;
+  }
+
+  window.clearTimeout(videoPreviewAutoplayTimer);
+  videoPreviewAutoplayTimer = 0;
+}
+
+function setVideoPreviewAutoplayEnabled(enabled) {
+  videoPreviewAutoplayEnabled = Boolean(enabled);
+
+  if (videoPreviewAutoplayToggle) {
+    videoPreviewAutoplayToggle.checked = videoPreviewAutoplayEnabled;
+  }
+
+  scheduleVideoPreviewAutoplay();
+}
+
+function scheduleVideoPreviewAutoplay(previewState = getCurrentVideoPreviewState()) {
+  clearVideoPreviewAutoplayTimer();
+
+  if (!videoPreviewAutoplayEnabled || !previewState) {
+    return;
+  }
+
+  const nextEntry = previewState.sequence[previewState.currentIndex + 1];
+
+  if (!nextEntry) {
+    videoPreviewAutoplayEnabled = false;
+
+    if (videoPreviewAutoplayToggle) {
+      videoPreviewAutoplayToggle.checked = false;
+    }
+
+    return;
+  }
+
+  if (isImagePreviewItem(previewState.currentItem)) {
+    videoPreviewAutoplayTimer = window.setTimeout(() => {
+      navigateVideoPreview(1);
+    }, AUTOPLAY_IMAGE_DURATION_MS);
+  }
+}
+
 function syncVideoPreviewNavigation(previewState = getCurrentVideoPreviewState()) {
+  const hasNextEntry = Boolean(
+    previewState && previewState.currentIndex < previewState.sequence.length - 1
+  );
+
   if (videoPreviewTitle) {
     videoPreviewTitle.textContent = previewState ? buildMediaPreviewTitle(previewState) : "";
+  }
+
+  if (videoPreviewSequence) {
+    videoPreviewSequence.textContent = buildMediaPreviewSequenceLabel(previewState);
+  }
+
+  if (videoPreviewUpNext) {
+    videoPreviewUpNext.textContent = buildVideoPreviewUpNextLabel(previewState);
+  }
+
+  if (videoPreviewAutoplayToggle) {
+    videoPreviewAutoplayToggle.checked = videoPreviewAutoplayEnabled;
+    videoPreviewAutoplayToggle.disabled = !previewState || !hasNextEntry;
   }
 
   syncVideoPreviewCertification(previewState);
@@ -4777,8 +5181,7 @@ function syncVideoPreviewNavigation(previewState = getCurrentVideoPreviewState()
   }
 
   if (videoPreviewNextButton) {
-    videoPreviewNextButton.disabled =
-      !previewState || previewState.currentIndex >= previewState.items.length - 1;
+    videoPreviewNextButton.disabled = !hasNextEntry;
   }
 }
 
@@ -4813,6 +5216,8 @@ function syncVideoPreviewMedia(previewState = getCurrentVideoPreviewState()) {
       videoPreviewImage.alt = "";
     }
   }
+
+  scheduleVideoPreviewAutoplay(previewState);
 }
 
 function buildMediaPreviewTitle(previewState) {
@@ -4822,7 +5227,45 @@ function buildMediaPreviewTitle(previewState) {
   const sourceLabel = buildItemSourceLabel(previewState.tripId, sourceFolderId);
   const sourceSuffix = sourceLabel ? ` // ${sourceLabel}` : "";
 
-  return `${previewType} // ${getItemDisplayName(item)} // ${previewState.currentIndex + 1}/${previewState.items.length}${sourceSuffix}`;
+  return `${previewType} // ${getItemDisplayName(item)}${sourceSuffix}`;
+}
+
+function buildMediaPreviewSequenceLabel(previewState) {
+  if (!previewState) {
+    return "";
+  }
+
+  return `${previewState.currentIndex + 1}/${previewState.sequence.length}`;
+}
+
+function buildVideoPreviewUpNextLabel(previewState) {
+  if (!previewState) {
+    return "";
+  }
+
+  const nextEntry = previewState.sequence[previewState.currentIndex + 1];
+  const currentTrip = trips.find((trip) => trip.id === previewState.tripId) || null;
+  const currentTripLabel = String(currentTrip?.slug || previewState.tripId || "").toUpperCase();
+
+  if (!nextEntry) {
+    return currentTripLabel ? `END OF ${currentTripLabel}.` : "";
+  }
+
+  const nextTrip = trips.find((trip) => trip.id === nextEntry.tripId) || null;
+  const nextFolder = getFoldersForTrip(nextEntry.tripId).find((folder) => folder.id === nextEntry.folderId) || null;
+  const nextPathLabel = buildFolderPathLabel(nextTrip, nextFolder)
+    .replace(/\/$/, "")
+    .toUpperCase();
+
+  if (nextEntry.tripId !== previewState.tripId) {
+    return `END OF ${currentTripLabel}. UP NEXT: ${nextPathLabel}`;
+  }
+
+  if (nextEntry.folderId !== previewState.folderId) {
+    return `UP NEXT: ${nextPathLabel}`;
+  }
+
+  return `UP NEXT: ${getItemDisplayName(nextEntry.item).toUpperCase()}`;
 }
 
 function isPreviewableMediaItem(item) {
@@ -4986,6 +5429,9 @@ function renderVideoPreviewComments(previewState = getCurrentVideoPreviewState()
   const selectedThreadId = currentThreadSurface === "preview"
     ? String(previewState?.threadCommentId || "")
     : "";
+  const visibleComments = selectedThreadId
+    ? comments.filter((comment) => comment.id !== selectedThreadId)
+    : comments;
   const canComment = Boolean(context && db && currentUser?.uid && canUploadMedia());
 
   if (videoPreviewCommentForm) {
@@ -4999,12 +5445,12 @@ function renderVideoPreviewComments(previewState = getCurrentVideoPreviewState()
   if (videoPreviewCommentsList) {
     videoPreviewCommentsList.innerHTML = !context
       ? ""
-      : comments.length > 0
-        ? comments
-            .map((comment) =>
-              renderMediaComment(comment, { selectedThread: comment.id === selectedThreadId })
-            )
+      : visibleComments.length > 0
+        ? visibleComments
+            .map((comment) => renderMediaComment(comment))
             .join("")
+        : selectedThreadId && comments.length > 0
+          ? ""
         : renderEmptySocialState("NO COMMENTS YET.");
   }
 
@@ -5052,7 +5498,6 @@ function renderVideoPreviewInteractionBar(previewState = getCurrentVideoPreviewS
 
 function renderMediaComment(comment, options = {}) {
   const context = buildThreadActionContext(comment);
-  const isThreadSelected = Boolean(options?.selectedThread);
   const actorMarkup = renderSocialActorLink(
     comment.authorLabel,
     comment.authorRouteId,
@@ -5066,20 +5511,11 @@ function renderMediaComment(comment, options = {}) {
   const editedMarkup = comment.editedAtMs
     ? `<span class="text-stone-400/42">EDITED</span>`
     : "";
-  const articleClass = isThreadSelected
-    ? "cursor-pointer border border-amber-200/30 bg-amber-100/[0.05] p-3 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.1)] transition hover:border-amber-200/45"
-    : "cursor-pointer border border-white/10 bg-black/24 p-3 transition hover:border-white/20 hover:bg-black/30";
+  const articleClass = "cursor-pointer border border-white/10 bg-black/24 p-3 transition hover:border-white/20 hover:bg-black/30";
   const articleActionAttrs =
     !isEditingSocialComment(comment) && context.threadOwnerUid && context.activityId
       ? `data-action="open-preview-thread" ${renderThreadActionAttributes(context)} title="Show thread"`
       : "";
-  const threadLabelMarkup = isThreadSelected
-    ? `
-      <p class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.18em] text-amber-100/78">
-        Thread Selected
-      </p>
-    `
-    : "";
 
   return `
     <article class="${articleClass}" ${articleActionAttrs}>
@@ -5094,7 +5530,6 @@ function renderMediaComment(comment, options = {}) {
             </div>
             ${controlsMarkup}
           </div>
-          ${threadLabelMarkup}
           ${bodyMarkup}
           ${interactionMarkup}
         </div>
@@ -5302,10 +5737,10 @@ function normalizeMediaComment(comment) {
     id: String(comment?.id || ""),
     type: "media-comment",
     body: normalizeSocialBody(comment?.body),
-    authorUid: String(comment?.authorUid || ""),
-    authorLabel: normalizeSocialLabel(comment?.authorLabel),
-    authorRouteId: normalizeRouteId(comment?.authorRouteId),
-    authorPhotoURL: String(comment?.authorPhotoURL || ""),
+    authorUid: String(comment?.authorUid || comment?.actorUid || ""),
+    authorLabel: normalizeSocialLabel(comment?.authorLabel || comment?.actorLabel),
+    authorRouteId: normalizeRouteId(comment?.authorRouteId || comment?.actorRouteId),
+    authorPhotoURL: String(comment?.authorPhotoURL || comment?.actorPhotoURL || ""),
     attachmentURL: String(comment?.attachmentURL || ""),
     attachmentStoragePath: String(comment?.attachmentStoragePath || ""),
     attachmentMimeType: String(comment?.attachmentMimeType || ""),
@@ -5590,7 +6025,7 @@ function renderThreadReply(reply) {
     : "";
 
   return `
-    <article class="border border-white/10 bg-black/20 p-3">
+    <article class="ml-4 border border-white/10 border-l-white/18 bg-black/20 p-3 sm:ml-6">
       <div class="flex items-start gap-3">
         <img src="${escapeHtml(getSocialPhotoUrl(reply.actorPhotoURL))}" alt="${escapeHtml(reply.actorLabel)}" class="h-9 w-9 shrink-0 border border-white/10 bg-black object-cover object-center">
         <div class="min-w-0 flex-1">
@@ -6197,11 +6632,15 @@ function renderVideoPreviewThreadPanel(previewState = getCurrentVideoPreviewStat
 
   if (!hasActiveThread) {
     if (videoPreviewThreadTitle) {
-      videoPreviewThreadTitle.textContent = "Selected Thread";
+      videoPreviewThreadTitle.textContent = "";
     }
 
     if (videoPreviewThreadContext) {
       videoPreviewThreadContext.textContent = "";
+    }
+
+    if (videoPreviewThreadRoot) {
+      videoPreviewThreadRoot.innerHTML = "";
     }
 
     if (videoPreviewThreadList) {
@@ -6221,13 +6660,19 @@ function renderVideoPreviewThreadPanel(previewState = getCurrentVideoPreviewStat
   }
 
   if (videoPreviewThreadTitle) {
-    videoPreviewThreadTitle.textContent = rootEntry ? buildThreadTitle(rootEntry) : "Selected Thread";
+    videoPreviewThreadTitle.textContent = "";
   }
 
   if (videoPreviewThreadContext) {
     videoPreviewThreadContext.textContent = rootEntry
       ? buildPreviewThreadContextLabel(rootEntry)
       : "OPENING SELECTED THREAD.";
+  }
+
+  if (videoPreviewThreadRoot) {
+    videoPreviewThreadRoot.innerHTML = rootEntry
+      ? renderThreadRootEntry(rootEntry)
+      : renderEmptySocialState(currentThreadStatusMessage || "LOADING THREAD.");
   }
 
   if (videoPreviewThreadList) {
@@ -6888,21 +7333,22 @@ function syncVideoPreviewCertification(previewState = getCurrentVideoPreviewStat
   }
 
   if (videoPreviewCertifyButton) {
-    videoPreviewCertifyButton.classList.toggle("hidden", !canCertify);
+    const certifyButtonClass = "min-h-[3.25rem] shrink-0 px-4 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.18em] transition disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 sm:px-3 sm:py-2 sm:text-[0.66rem]";
+    const certifyGoldClass = `${certifyButtonClass} border border-amber-200/35 bg-amber-100/[0.07] text-amber-50 hover:border-amber-100/55 hover:bg-amber-100/[0.12]`;
+    const uncertifyIceClass = `${certifyButtonClass} border border-sky-300/32 bg-sky-100/[0.03] text-sky-100 hover:border-sky-200/55 hover:bg-sky-100/[0.08]`;
     videoPreviewCertifyButton.disabled = false;
     videoPreviewCertifyButton.textContent = certified ? "Uncertify" : "Certify";
     videoPreviewCertifyButton.setAttribute(
       "aria-label",
       certified ? "Remove Certification" : "Certify Media"
     );
+    videoPreviewCertifyButton.className = certified ? uncertifyIceClass : certifyGoldClass;
+    videoPreviewCertifyButton.classList.toggle("hidden", !canCertify);
 
     if (certified) {
-      videoPreviewCertifyButton.setAttribute(
-        "style",
-        `${getHighlightButtonStyle(true)}color:#fff8cb;`
-      );
-    } else {
       videoPreviewCertifyButton.removeAttribute("style");
+    } else {
+      videoPreviewCertifyButton.setAttribute("style", `${getHighlightButtonStyle(true)}color:#fff8cb;`);
     }
   }
 }
@@ -7072,6 +7518,13 @@ function handleTripBrowserClick(event) {
     return;
   }
 
+  const removeTripCoverTrigger = event.target.closest("[data-action='remove-trip-cover']");
+
+  if (removeTripCoverTrigger) {
+    void handleTripCoverRemoveClick(removeTripCoverTrigger);
+    return;
+  }
+
   const folderDeleteTrigger = event.target.closest("[data-action='delete-folder']");
 
   if (folderDeleteTrigger) {
@@ -7100,10 +7553,21 @@ function handleTripBrowserClick(event) {
     return;
   }
 
+  const featuredTrigger = event.target.closest("[data-action='toggle-featured-clip']");
+
+  if (featuredTrigger) {
+    void handleFeaturedClipToggleClick(featuredTrigger);
+    return;
+  }
+
   const editTrigger = event.target.closest("[data-action='edit-item']");
 
   if (editTrigger) {
     handleItemEditClick(editTrigger);
+    return;
+  }
+
+  if (event.target.closest("[data-ignore-trip-toggle='true']")) {
     return;
   }
 
@@ -7182,6 +7646,13 @@ function handleVideoPreviewClick(trigger) {
 }
 
 function handleTripBrowserChange(event) {
+  const tripCoverInput = event.target.closest("[data-action='trip-cover-upload']");
+
+  if (tripCoverInput) {
+    void handleTripCoverUploadInputChange(tripCoverInput);
+    return;
+  }
+
   const sortSelect = event.target.closest("[data-action='sort-items']");
 
   if (!sortSelect) {
@@ -7402,6 +7873,65 @@ async function handleTripMoveClick(trigger) {
   }
 }
 
+async function handleTripCoverRemoveClick(trigger) {
+  if (!db || !isAdminViewEnabled()) {
+    return;
+  }
+
+  const tripId = String(trigger.getAttribute("data-trip-id") || "");
+  const tripIndex = trips.findIndex((entry) => entry.id === tripId);
+  const trip = tripIndex >= 0 ? trips[tripIndex] : null;
+
+  if (!trip || (!trip.coverImageStoragePath && !trip.coverImageURL)) {
+    return;
+  }
+
+  trigger.disabled = true;
+
+  try {
+    await setDoc(
+      doc(db, runtimeConfig.collections.trips, trip.id),
+      {
+        coverImageURL: deleteField(),
+        coverImageStoragePath: deleteField(),
+        updatedAt: serverTimestamp(),
+        updatedByUid: currentUser?.uid || "",
+        updatedByEmail: currentUser?.email || "",
+      },
+      { merge: true }
+    );
+
+    if (storage && trip.coverImageStoragePath) {
+      try {
+        await deleteObject(storageRef(storage, trip.coverImageStoragePath));
+      } catch (error) {
+        if (!isStorageObjectMissing(error)) {
+          throw error;
+        }
+      }
+    }
+
+    trips = trips.map((entry, index) =>
+      entry.id === trip.id
+        ? normalizeTrip(
+            {
+              ...entry,
+              coverImageURL: "",
+              coverImageStoragePath: "",
+            },
+            index
+          )
+        : entry
+    );
+
+    renderAll();
+    authDetail.textContent = `${trip.slug.toUpperCase()} CARD IMAGE REMOVED.`;
+  } catch (error) {
+    authDetail.textContent = getErrorMessage(error, "Could not remove trip image.");
+    trigger.disabled = false;
+  }
+}
+
 async function handleTripDeleteClick(trigger) {
   if (!db || !isAdminViewEnabled()) {
     return;
@@ -7432,6 +7962,26 @@ async function handleTripDeleteClick(trigger) {
   try {
     authDetail.textContent = `DELETING ${trip.slug.toUpperCase()}/`;
     await deleteTripCascade(trip);
+
+    if (featuredClip?.tripId === trip.id) {
+      const siteSettingsRef = getSiteSettingsRef();
+
+      if (siteSettingsRef) {
+        await setDoc(
+          siteSettingsRef,
+          {
+            featuredClip: deleteField(),
+            updatedAt: serverTimestamp(),
+            updatedByUid: currentUser?.uid || "",
+            updatedByEmail: currentUser?.email || "",
+          },
+          { merge: true }
+        );
+      }
+
+      featuredClip = null;
+    }
+
     authDetail.textContent = STRINGS.trips.removed(trip.slug);
   } catch (error) {
     authDetail.textContent = getErrorMessage(error, STRINGS.errors.tripDeleteFailed);
@@ -7465,6 +8015,25 @@ async function handleFolderDeleteClick(trigger) {
   try {
     await deleteFolderCascade(trip, folder);
 
+    if (featuredClip?.tripId === tripId && featuredClip?.folderId === folderId) {
+      const siteSettingsRef = getSiteSettingsRef();
+
+      if (siteSettingsRef) {
+        await setDoc(
+          siteSettingsRef,
+          {
+            featuredClip: deleteField(),
+            updatedAt: serverTimestamp(),
+            updatedByUid: currentUser?.uid || "",
+            updatedByEmail: currentUser?.email || "",
+          },
+          { merge: true }
+        );
+      }
+
+      featuredClip = null;
+    }
+
     const remainingFolders = getFoldersForTrip(tripId).filter((entry) => entry.id !== folderId);
     foldersByTrip.set(tripId, remainingFolders);
 
@@ -7493,6 +8062,16 @@ async function handleFolderDeleteClick(trigger) {
 }
 
 async function deleteTripCascade(trip) {
+  if (storage && trip?.coverImageStoragePath) {
+    try {
+      await deleteObject(storageRef(storage, trip.coverImageStoragePath));
+    } catch (error) {
+      if (!isStorageObjectMissing(error)) {
+        throw error;
+      }
+    }
+  }
+
   if (storage) {
     await deleteStoragePrefix(storageRef(storage, `trips/${trip.slug}`));
   }
@@ -7635,6 +8214,7 @@ async function handleItemDeleteClick(trigger) {
   const itemId = String(trigger.getAttribute("data-item-id") || "");
   const items = getItemsForFolder(tripId, folderId);
   const item = items.find((entry) => entry.id === itemId);
+  const featuredItem = isFeaturedClipItem(item, tripId, folderId);
 
   if (!tripId || !folderId || !itemId || !item || !canDeleteItem(item)) {
     return;
@@ -7683,6 +8263,25 @@ async function handleItemDeleteClick(trigger) {
         itemId
       )
     );
+
+    if (featuredItem) {
+      const siteSettingsRef = getSiteSettingsRef();
+
+      if (siteSettingsRef) {
+        await setDoc(
+          siteSettingsRef,
+          {
+            featuredClip: deleteField(),
+            updatedAt: serverTimestamp(),
+            updatedByUid: currentUser?.uid || "",
+            updatedByEmail: currentUser?.email || "",
+          },
+          { merge: true }
+        );
+
+        featuredClip = null;
+      }
+    }
 
     authDetail.textContent = STRINGS.items.itemRemoved(
       getItemDisplayName(item) || "ITEM"
@@ -7804,9 +8403,70 @@ async function handleProfileDeleteClick(trigger) {
   }
 }
 
+async function handleFriendDisplayNameEditClick(trigger) {
+  if (!db || !runtimeConfig?.collections?.users || !isAdminViewEnabled()) {
+    return;
+  }
+
+  const userId = String(trigger.getAttribute("data-user-id") || "");
+  const friend = friends.find((item) => item.uid === userId || item.id === userId);
+
+  if (!userId || !friend) {
+    return;
+  }
+
+  const currentValue = friend.displayName || "";
+  const nextValue = window.prompt(
+    `Edit display name for ${getFriendLabel(friend)}.`,
+    currentValue
+  );
+
+  if (nextValue === null) {
+    return;
+  }
+
+  const nextDisplayName = normalizeDisplayName(nextValue);
+  trigger.disabled = true;
+
+  try {
+    await setDoc(
+      doc(db, runtimeConfig.collections.users, userId),
+      {
+        uid: friend.uid || userId,
+        email: friend.email || "",
+        displayName: nextDisplayName,
+        googleName: normalizePersonName(friend.googleName || getFriendGoogleName(friend)),
+        routeId: normalizeRouteId(friend.routeId),
+        photoURL: friend.photoStoragePath ? friend.photoURL || "" : "",
+        photoStoragePath: friend.photoStoragePath || "",
+        role: friend.role || ROLE_FRIEND,
+        isAdmin: isElevatedRole(friend.role || ROLE_FRIEND),
+        updatedAt: serverTimestamp(),
+        updatedByUid: currentUser?.uid || "",
+        updatedByEmail: currentUser?.email || "",
+      },
+      { merge: true }
+    );
+
+    if (currentUser?.uid === userId && currentUserProfile) {
+      currentUserProfile = normalizeFriend({
+        ...currentUserProfile,
+        displayName: nextDisplayName,
+      });
+    }
+
+    authDetail.textContent = `${getFriendLabel(friend).toUpperCase()} DISPLAY NAME UPDATED.`;
+  } catch (error) {
+    authDetail.textContent = getErrorMessage(error, "Could not update display name.");
+    trigger.disabled = false;
+  }
+}
+
 function renderAll() {
+  recentMediaViews = pruneRecentMediaViews(recentMediaViews);
   syncResponsivePanels();
   renderFeaturedMessage();
+  renderFeaturedClip();
   renderAuth();
   renderRouteChrome();
   renderCurrentPage();
@@ -8293,6 +8953,7 @@ function renderResolvedProfilePage(profileView) {
   const friend = profileView?.friend || null;
   const isReady = profileView?.state === "ready" && friend;
   const isSelf = Boolean(isReady && friend.uid && friend.uid === currentUser?.uid);
+  const canAdminEditOtherProfile = Boolean(isReady && !isSelf && isAdminViewEnabled());
   const authoredCount = isReady ? countAuthoredItemsForUser(friend) : 0;
   const tripMarkup = isReady
     ? renderTripSections({ view: "profile", profileFriend: friend })
@@ -8358,15 +9019,25 @@ function renderResolvedProfilePage(profileView) {
   }
 
   if (profileDetailsForm) {
-    profileDetailsForm.classList.toggle("hidden", !isSelf);
+    profileDetailsForm.dataset.targetUserId = isReady ? friend.uid || "" : "";
+    profileDetailsForm.classList.toggle("hidden", !(isSelf || canAdminEditOtherProfile));
   }
 
-  if (profileDisplayNameInput && isSelf) {
-    profileDisplayNameInput.value = friend.displayName || "";
+  if (profileDisplayNameInput) {
+    profileDisplayNameInput.value = isReady ? friend.displayName || "" : "";
   }
 
-  if (profileRouteInput && isSelf) {
-    profileRouteInput.value = friend.routeId || "";
+  if (profileRouteInput) {
+    profileRouteInput.value = isReady ? friend.routeId || "" : "";
+    profileRouteInput.toggleAttribute("disabled", !isSelf);
+  }
+
+  if (profileRouteField) {
+    profileRouteField.classList.toggle("hidden", !isSelf);
+  }
+
+  if (profileDetailsSubmit) {
+    profileDetailsSubmit.textContent = isSelf ? "Save Changes" : "Update Display Name";
   }
 
   if (profileTripList) {
@@ -8609,6 +9280,74 @@ function isUpcomingTrip(trip) {
   return /\b(kelowna|ktown|k town)\b/.test(tripText) && /\b26\b/.test(tripText);
 }
 
+function renderTripCoverMarkup(trip, expanded) {
+  if (!trip?.coverImageURL) {
+    return "";
+  }
+
+  const imageToneClass = expanded
+    ? "opacity-35 grayscale-0"
+    : "opacity-20 grayscale sm:group-hover:opacity-35 sm:group-hover:grayscale-0 sm:group-focus-within:opacity-35 sm:group-focus-within:grayscale-0";
+
+  return `
+    <div class="pointer-events-none absolute inset-y-0 left-0 z-0 w-1/2 overflow-hidden sm:w-[33%]">
+      <img src="${escapeHtml(trip.coverImageURL)}" alt="${escapeHtml(trip.label || trip.slug)}" class="h-full w-full object-cover object-left transition duration-300 ${imageToneClass}">
+      <div class="absolute inset-0 bg-[linear-gradient(to_right,rgba(8,8,8,0)_0%,rgba(8,8,8,0)_66%,rgba(8,8,8,0.45)_82%,rgba(8,8,8,0.96)_100%)]"></div>
+    </div>
+  `;
+}
+
+function renderTripSettingsMenu(trip) {
+  if (!isAdminViewEnabled()) {
+    return "";
+  }
+
+  const previewMarkup = trip.coverImageURL
+    ? `
+      <img src="${escapeHtml(trip.coverImageURL)}" alt="${escapeHtml(trip.label || trip.slug)}" class="mt-3 aspect-[16/10] w-full border border-white/10 object-cover object-left opacity-85 grayscale transition">
+    `
+    : `
+      <p class="mt-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.14em] text-stone-400/74">
+        No trip card image set.
+      </p>
+    `;
+
+  return `
+    <details class="relative shrink-0" data-ignore-trip-toggle="true">
+      <summary class="flex h-9 w-9 cursor-pointer list-none items-center justify-center border border-white/12 bg-black/40 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] leading-none tracking-[0.08em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08] [&::-webkit-details-marker]:hidden" aria-label="Trip settings">
+        ...
+      </summary>
+      <div class="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-64 border border-white/12 bg-neutral-950/98 p-3 shadow-[0_18px_54px_rgba(0,0,0,0.5)]">
+        <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-300/70">
+          Trip Card Image
+        </p>
+        <p class="mt-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.14em] text-stone-400/74">
+          Hover image for this trip card. Mobile keeps it visible in black and white until open.
+        </p>
+        ${previewMarkup}
+        <label class="mt-3 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.14em] text-stone-300/70">
+          <span class="mb-2 block">Upload Image</span>
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-action="trip-cover-upload" data-trip-id="${escapeHtml(trip.id)}" class="w-full border border-white/12 bg-black/40 px-3 py-2 text-[0.62rem] tracking-[0.08em] text-stone-100 outline-none transition file:mr-3 file:border-0 file:bg-white/8 file:px-2 file:py-1.5 file:font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] file:text-[0.54rem] file:uppercase file:tracking-[0.16em] file:text-stone-200 focus:border-white/35">
+        </label>
+        ${
+          trip.coverImageURL || trip.coverImageStoragePath
+            ? `
+              <button type="button" data-action="remove-trip-cover" data-trip-id="${escapeHtml(trip.id)}" class="mt-3 block w-full border border-white/10 px-2 py-1.5 text-left font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.16em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.06] hover:text-white">
+                Remove Trip Image
+              </button>
+            `
+            : ""
+        }
+        <div class="mt-3 border-t border-white/10 pt-3">
+          <button type="button" data-action="delete-trip" data-trip-id="${escapeHtml(trip.id)}" class="block w-full border border-transparent px-2 py-1.5 text-left font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.16em] text-stone-200 transition hover:border-red-300/35 hover:bg-red-300/10 hover:text-red-100">
+            ${STRINGS.trips.deleteTrip}
+          </button>
+        </div>
+      </div>
+    </details>
+  `;
+}
+
 function renderTripSection(trip, index, { view = "archive", profileFriend = null } = {}) {
   const isProfileView = view === "profile";
   const adminMode = !isProfileView && isAdminViewEnabled();
@@ -8634,12 +9373,14 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
   const pathLabel = selectedFolder ? buildFolderPathLabel(trip, selectedFolder) : `${trip.slug}/`;
   const highlightFolderSelected = isHighlightFolder(selectedFolder);
   const tripToggleIndicatorMarkup = isProfileView ? "" : renderTripToggleIndicator(expanded);
+  const tripCoverMarkup = renderTripCoverMarkup(trip, expanded);
   const tripStatusTagMarkup = renderTripStatusTag(trip);
+  const tripSettingsMarkup = !isProfileView && adminMode ? renderTripSettingsMenu(trip) : "";
   const shellClass = isProfileView
     ? "border border-white/12 bg-[linear-gradient(to_bottom,rgba(38,38,38,0.18),rgba(255,255,255,0.02)_40%,rgba(0,0,0,0.1))]"
     : "border border-white/10 bg-white/[0.02]";
   const headerClass = isProfileView
-    ? "flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.18),rgba(255,255,255,0.01)_46%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
+    ? "relative flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.18),rgba(255,255,255,0.01)_46%,transparent)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5"
     : expanded
       ? "relative flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(to_right,rgba(38,38,38,0.08),rgba(255,255,255,0.008)_42%,transparent)] px-4 py-4 transition hover:bg-[linear-gradient(to_right,rgba(52,52,52,0.11),rgba(255,255,255,0.014)_42%,transparent)] sm:flex-row sm:items-end sm:justify-between sm:px-5"
       : "relative flex flex-col gap-3 border-b border-white/10 px-4 py-4 transition hover:bg-[linear-gradient(to_right,rgba(40,40,40,0.08),rgba(255,255,255,0.012)_42%,transparent)] sm:flex-row sm:items-end sm:justify-between sm:px-5";
@@ -8678,7 +9419,7 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
         highlightFolderSelected,
         pathLabel,
         contributeMarkup,
-        responsiveClass: "mobile-folder-open mt-3 -mx-4 overflow-hidden lg:hidden",
+        responsiveClass: "mobile-folder-open mt-3 min-w-0 overflow-hidden lg:hidden",
       })
     : "";
   const desktopActiveFolderPanelMarkup = selectedFolder
@@ -8701,20 +9442,21 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
       });
 
   return `
-    <section class="${shellClass}">
-      <div class="${headerClass}${headerInteractiveClass}"${headerToggleAttributes}>
+    <section class="${shellClass} min-w-0 overflow-hidden">
+      <div class="${headerClass} group${headerInteractiveClass}"${headerToggleAttributes}>
+        ${tripCoverMarkup}
         ${tripToggleIndicatorMarkup}
-        <div class="space-y-2">
+        <div class="relative z-10 space-y-2">
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.3em] ${isProfileView ? "text-stone-200/72" : "text-stone-300/55"}">${String(
             getTripSequenceNumber(trip, index)
           ).padStart(4, "0")}</p>
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="whitespace-nowrap text-2xl uppercase tracking-[0.18em] text-stone-100 sm:text-3xl">${escapeHtml(`${trip.slug}/`)}</h2>
+            <h2 class="break-words text-2xl uppercase tracking-[0.18em] text-stone-100 [overflow-wrap:anywhere] sm:whitespace-nowrap sm:text-3xl">${escapeHtml(`${trip.slug}/`)}</h2>
             ${tripStatusTagMarkup}
           </div>
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs uppercase tracking-[0.18em] ${isProfileView ? "text-stone-300/60" : "text-stone-300/60"}">${escapeHtml(trip.label)}</p>
         </div>
-        <div class="min-w-0 w-full">
+        <div class="relative z-10 min-w-0 w-full">
           <div class="flex w-full flex-wrap items-center justify-start gap-2 sm:justify-end sm:gap-3 sm:pr-1">
             ${
               isProfileView
@@ -8747,17 +9489,10 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
                   >
                     ${STRINGS.trips.moveTripDown}
                   </button>
-                  <button
-                    type="button"
-                    data-action="delete-trip"
-                    data-trip-id="${escapeHtml(trip.id)}"
-                    class="${adminContextButtonClass}"
-                  >
-                    ${STRINGS.trips.deleteTrip}
-                  </button>
                 `
                 : ""
             }
+            ${tripSettingsMarkup}
           </div>
         </div>
       </div>
@@ -8856,7 +9591,83 @@ function countAuthoredItemsForUser(friend) {
 
 function buildMemberPostCountLabel(count) {
   const total = Number(count || 0);
-  return total === 1 ? "1 POST" : `${total} POSTS`;
+  return total === 1 ? "1 UPLOAD" : `${total} UPLOADS`;
+}
+
+function buildRecentMediaViewKey(item, tripId, folderId) {
+  const sourceFolderId = resolveItemSourceFolderId(item, folderId);
+  return tripId && sourceFolderId && item?.id
+    ? `${tripId}:${sourceFolderId}:${item.id}`
+    : "";
+}
+
+function getRecentMediaViewTimestamp(item, tripId, folderId) {
+  const key = buildRecentMediaViewKey(item, tripId, folderId);
+  return key ? Number(recentMediaViews[key] || 0) : 0;
+}
+
+function isMediaItemViewedRecently(item, tripId, folderId) {
+  const viewedAt = getRecentMediaViewTimestamp(item, tripId, folderId);
+  return viewedAt > 0 && Date.now() - viewedAt <= RECENT_MEDIA_VIEW_WINDOW_MS;
+}
+
+function formatRecentMediaViewLabel(viewedAtMs) {
+  const elapsedMs = Math.max(0, Date.now() - Number(viewedAtMs || 0));
+
+  if (elapsedMs < 60 * 1000) {
+    return "JUST NOW";
+  }
+
+  if (elapsedMs < 60 * 60 * 1000) {
+    return `${Math.max(1, Math.round(elapsedMs / (60 * 1000)))}M AGO`;
+  }
+
+  return `${Math.max(1, Math.round(elapsedMs / (60 * 60 * 1000)))}H AGO`;
+}
+
+function renderRecentMediaViewMeta(item, tripId, folderId) {
+  return renderRecentMediaViewMetaWithKey(item, tripId, folderId, "");
+}
+
+function renderRecentMediaViewMetaWithKey(item, tripId, folderId, mostRecentViewedKey = "") {
+  const viewedAt = getRecentMediaViewTimestamp(item, tripId, folderId);
+  const itemKey = buildRecentMediaViewKey(item, tripId, folderId);
+
+  if (
+    !viewedAt ||
+    !itemKey ||
+    itemKey !== mostRecentViewedKey ||
+    !isMediaItemViewedRecently(item, tripId, folderId)
+  ) {
+    return "";
+  }
+
+  return `
+    <div class="mt-1.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.14em] text-stone-500/78">
+      Most Recently Viewed // ${escapeHtml(formatRecentMediaViewLabel(viewedAt))}
+    </div>
+  `;
+}
+
+function getMostRecentVisibleMediaViewKey(items, tripId, folderId) {
+  let mostRecentViewedKey = "";
+  let mostRecentViewedAt = 0;
+
+  items.forEach((item) => {
+    const itemKey = buildRecentMediaViewKey(item, tripId, folderId);
+    const viewedAt = itemKey ? Number(recentMediaViews[itemKey] || 0) : 0;
+
+    if (
+      itemKey &&
+      viewedAt > mostRecentViewedAt &&
+      isMediaItemViewedRecently(item, tripId, folderId)
+    ) {
+      mostRecentViewedKey = itemKey;
+      mostRecentViewedAt = viewedAt;
+    }
+  });
+
+  return mostRecentViewedKey;
 }
 
 function getItemDisplayName(item) {
@@ -8877,6 +9688,7 @@ function getItemDisplayName(item) {
 
 function renderItemRows(items, tripId, folderId, view = "archive", options = {}) {
   const showSourceColumn = Boolean(options.showSourceColumn);
+  const mostRecentViewedKey = getMostRecentVisibleMediaViewKey(items, tripId, folderId);
 
   if (items.length === 0) {
     return `
@@ -8905,14 +9717,29 @@ function renderItemRows(items, tripId, folderId, view = "archive", options = {})
       const source = renderItemSource(tripId, sourceFolderId);
       const author = renderItemAuthor(item);
       const certified = renderItemCertified(item);
-      const meta = renderItemMeta(item, tripId, sourceFolderId);
+      const meta = renderItemMeta(item, tripId, sourceFolderId, { mostRecentViewedKey });
       const cellBorderClass = certifiedRow
         ? "border-b border-transparent"
         : "border-b border-white/8";
       const nameMarkup = renderItemNameMarkup(item, displayName, tripId, folderId, view);
+      const previewRowSelected = Boolean(
+        currentVideoPreviewContext &&
+          currentVideoPreviewContext.view === view &&
+          currentVideoPreviewContext.tripId === tripId &&
+          currentVideoPreviewContext.folderId === folderId &&
+          currentVideoPreviewContext.itemId === item.id
+      );
 
       return `
-        <tr class="transition hover:bg-white/[0.03]${certifiedRow ? " bg-[rgba(255,221,138,0.028)]" : ""}"${certifiedRow ? ` style="${getCertifiedRowStyle()}"` : ""}>
+        <tr
+          data-preview-row="true"
+          data-view="${escapeHtml(view)}"
+          data-trip-id="${escapeHtml(tripId)}"
+          data-folder-id="${escapeHtml(folderId)}"
+          data-item-id="${escapeHtml(item.id)}"
+          class="transition hover:bg-white/[0.03]${certifiedRow ? " bg-[rgba(255,221,138,0.028)]" : ""}${previewRowSelected ? " bg-white/[0.04]" : ""}"
+          ${certifiedRow ? ` style="${getCertifiedRowStyle()}"` : ""}
+        >
           <td class="align-middle min-w-[4rem] ${cellBorderClass} px-2 py-2 sm:min-w-[4.5rem] sm:px-2.5 sm:py-2.5">${preview}</td>
           ${showSourceColumn ? `<td class="align-middle min-w-[7rem] ${cellBorderClass} px-2 py-2 uppercase text-stone-200/82 sm:min-w-[8rem] sm:px-2.5">${source}</td>` : ""}
           <td class="align-middle min-w-[11rem] ${cellBorderClass} px-2 py-2 sm:min-w-[12rem] sm:px-2.5">${nameMarkup}</td>
@@ -8929,8 +9756,13 @@ function renderItemRows(items, tripId, folderId, view = "archive", options = {})
 }
 
 function renderItemNameMarkup(item, displayName, tripId, folderId, view = "archive") {
+  const viewedRecently = isMediaItemViewedRecently(item, tripId, folderId);
+  const linkToneClass = viewedRecently
+    ? "text-stone-500/72 hover:text-stone-200"
+    : "text-stone-100 hover:text-white";
+
   if (item.kind === "text") {
-    return `<div class="text-stone-100">${escapeHtml(item.title || item.name)}</div>`;
+    return `<div class="${viewedRecently ? "text-stone-500/72" : "text-stone-100"}">${escapeHtml(item.title || item.name)}</div>`;
   }
 
   if (isPreviewableMediaItem(item)) {
@@ -8942,7 +9774,7 @@ function renderItemNameMarkup(item, displayName, tripId, folderId, view = "archi
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="bg-transparent p-0 text-left text-stone-100 underline-offset-4 transition hover:text-white hover:underline"
+        class="bg-transparent p-0 text-left underline-offset-4 transition hover:underline ${linkToneClass}"
         aria-label="Preview ${escapeHtml(displayName)}"
       >
         ${escapeHtml(displayName)}
@@ -8973,14 +9805,13 @@ function renderItemCertified(item) {
   return `<span class="font-['Teko',sans-serif] text-[1.15rem] leading-none tracking-[0.18em]" style="${getHighlightTextStyle()}">${escapeHtml(HIGHLIGHT_FOLDER_LABEL)}</span>`;
 }
 
-function renderItemMeta(item, tripId, folderId) {
+function renderItemMeta(item, tripId, folderId, options = {}) {
   const adminContext = isAdminViewEnabled();
-  const neutralEditButtonClass = "inline-flex border border-white/10 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04]";
-  const accentMoveButtonClass = "inline-flex border border-white/10 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08]";
-  const accentDeleteButtonClass = "inline-flex border border-white/10 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-stone-200 transition hover:border-red-300/35 hover:bg-red-300/10 hover:text-red-100";
-  const adminActionButtonClass = "inline-flex border border-sky-300/32 bg-sky-100/[0.03] px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-sky-100 transition hover:border-sky-200/55 hover:bg-sky-100/[0.08]";
-  const certifyButtonClass = "inline-flex h-6 w-6 items-center justify-center border border-sky-300/32 bg-sky-100/[0.03] px-0 py-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none text-sky-100 transition hover:border-sky-200/55 hover:bg-sky-100/[0.08]";
-  const certifyActiveButtonClass = "inline-flex h-6 w-6 items-center justify-center border border-transparent px-0 py-0 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none text-amber-50 transition hover:opacity-95";
+  const neutralMenuButtonClass = getSocialMenuItemButtonClass();
+  const accentDeleteButtonClass = getSocialMenuItemButtonClass("delete");
+  const certifyMenuButtonClass = "block w-full border border-amber-200/35 bg-amber-100/[0.07] px-2 py-1.5 text-left font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.16em] text-amber-50 transition hover:border-amber-100/55 hover:bg-amber-100/[0.12] disabled:cursor-not-allowed disabled:opacity-45";
+  const uncertifyMenuButtonClass = "block w-full border border-sky-300/32 bg-sky-100/[0.03] px-2 py-1.5 text-left font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.16em] text-sky-100 transition hover:border-sky-200/55 hover:bg-sky-100/[0.08] disabled:cursor-not-allowed disabled:opacity-45";
+  const featuredMenuButtonClass = "block w-full border border-sky-300/24 bg-sky-100/[0.03] px-2 py-1.5 text-left font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.16em] text-sky-100 transition hover:border-sky-200/55 hover:bg-sky-100/[0.08] disabled:cursor-not-allowed disabled:opacity-45";
   const summary =
     item.kind === "text"
       ? STRINGS.items.textPost
@@ -9003,6 +9834,10 @@ function renderItemMeta(item, tripId, folderId) {
       </div>
     `
     : "";
+  const mostRecentViewedKey = String(options?.mostRecentViewedKey || "");
+  const recentViewMarkup = item.kind === "file"
+    ? renderRecentMediaViewMetaWithKey(item, tripId, folderId, mostRecentViewedKey)
+    : "";
   const actionButtons = [];
 
   if (adminContext && item.kind === "file") {
@@ -9013,12 +9848,24 @@ function renderItemMeta(item, tripId, folderId) {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="${isItemCertified(item) ? certifyActiveButtonClass : certifyButtonClass}"
-        ${isItemCertified(item) ? `style="${getHighlightButtonStyle(true)}"` : ""}
-        title="${isItemCertified(item) ? "Remove Certification" : "Certify Media"}"
-        aria-label="${isItemCertified(item) ? "Remove Certification" : "Certify Media"}"
+        class="${isItemCertified(item) ? uncertifyMenuButtonClass : certifyMenuButtonClass}"
       >
-        ${isItemCertified(item) ? "&#9733;" : "&#9734;"}
+        ${isItemCertified(item) ? "Uncertify" : "Certify"}
+      </button>
+    `);
+  }
+
+  if (adminContext && item.kind === "file" && isVideoPreviewItem(item)) {
+    actionButtons.push(`
+      <button
+        type="button"
+        data-action="toggle-featured-clip"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="${featuredMenuButtonClass}"
+      >
+        ${isFeaturedClipItem(item, tripId, folderId) ? "Clear Featured Clip" : "Set Featured Clip"}
       </button>
     `);
   }
@@ -9031,7 +9878,7 @@ function renderItemMeta(item, tripId, folderId) {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="${adminContext ? adminActionButtonClass : neutralEditButtonClass}"
+        class="${neutralMenuButtonClass}"
       >
         ${STRINGS.items.edit}
       </button>
@@ -9046,7 +9893,7 @@ function renderItemMeta(item, tripId, folderId) {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="${adminContext ? adminActionButtonClass : accentMoveButtonClass}"
+        class="${neutralMenuButtonClass}"
       >
         ${STRINGS.items.move}
       </button>
@@ -9061,7 +9908,7 @@ function renderItemMeta(item, tripId, folderId) {
         data-trip-id="${escapeHtml(tripId)}"
         data-folder-id="${escapeHtml(folderId)}"
         data-item-id="${escapeHtml(item.id)}"
-        class="${adminContext ? adminActionButtonClass : accentDeleteButtonClass}"
+        class="${accentDeleteButtonClass}"
       >
         ${STRINGS.items.delete}
       </button>
@@ -9070,10 +9917,21 @@ function renderItemMeta(item, tripId, folderId) {
 
   const actionsMarkup =
     actionButtons.length > 0
-      ? `<div class="mt-2 flex flex-wrap gap-1.5">${actionButtons.join("")}</div>`
+      ? `
+        <div class="mt-2">
+          <details class="relative inline-block">
+            <summary class="flex h-7 w-7 cursor-pointer list-none items-center justify-center border border-white/10 bg-black/40 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none tracking-[0.08em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08] [&::-webkit-details-marker]:hidden" aria-label="Clip actions">
+              ...
+            </summary>
+            <div class="absolute right-0 top-[calc(100%+0.35rem)] z-30 w-44 border border-white/12 bg-neutral-950/98 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.45)]">
+              ${actionButtons.join("")}
+            </div>
+          </details>
+        </div>
+      `
       : "";
 
-  return `${summary}${descriptionMarkup}${interactionMarkup}${actionsMarkup}`;
+  return `${summary}${descriptionMarkup}${recentViewMarkup}${interactionMarkup}${actionsMarkup}`;
 }
 
 function renderItemPreview(item, tripId, folderId, view = "archive", certified = false) {
@@ -9837,6 +10695,8 @@ function normalizeTrip(trip, index) {
       : sortOrder + 1,
     sortOrder,
     subtitle: sanitizeUpper(trip?.subtitle || "FILE SYSTEM READY"),
+    coverImageURL: String(trip?.coverImageURL || ""),
+    coverImageStoragePath: String(trip?.coverImageStoragePath || ""),
     folders: Array.isArray(trip?.folders)
       ? trip.folders.map((folder) => slugifyFolder(folder))
       : undefined,
@@ -9996,8 +10856,8 @@ function renderFriendCard(friend, postCount = 0) {
   const canDeleteProfile = canEditRole && !isProtectedProfile(friend);
   const profileHref = friend.routeId ? buildProfilePath(friend.routeId) : "";
   const nameMarkup = profileHref
-    ? `<a href="${escapeHtml(profileHref)}" class="truncate text-sm uppercase tracking-[0.14em] text-stone-100 transition hover:text-white xl:text-[0.78rem] xl:tracking-[0.12em] min-[1920px]:text-sm min-[1920px]:tracking-[0.14em]">${escapeHtml(label)}</a>`
-    : `<p class="truncate text-sm uppercase tracking-[0.14em] text-stone-100 xl:text-[0.78rem] xl:tracking-[0.12em] min-[1920px]:text-sm min-[1920px]:tracking-[0.14em]">${escapeHtml(label)}</p>`;
+    ? `<a href="${escapeHtml(profileHref)}" class="min-w-0 break-words text-sm uppercase tracking-[0.14em] text-stone-100 transition hover:text-white [overflow-wrap:anywhere] xl:text-[0.78rem] xl:tracking-[0.12em] min-[1920px]:text-sm min-[1920px]:tracking-[0.14em]">${escapeHtml(label)}</a>`
+    : `<p class="min-w-0 break-words text-sm uppercase tracking-[0.14em] text-stone-100 [overflow-wrap:anywhere] xl:text-[0.78rem] xl:tracking-[0.12em] min-[1920px]:text-sm min-[1920px]:tracking-[0.14em]">${escapeHtml(label)}</p>`;
   const metaLabel = `${friend.routeId ? `#${friend.routeId} / ` : ""}${buildMemberPostCountLabel(postCount)}`;
   const currentUserMarkup = isCurrentUser
     ? `<span class="border border-white/10 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-stone-300/70 xl:px-1 xl:text-[0.5rem] min-[1920px]:px-1.5 min-[1920px]:text-[0.58rem]">${STRINGS.members.you}</span>`
@@ -10008,7 +10868,7 @@ function renderFriendCard(friend, postCount = 0) {
         badge
       )}</span>`;
   const stackedMetaMarkup = `<div class="hidden xl:flex xl:flex-wrap xl:items-center xl:gap-1.5 min-[1920px]:hidden">${currentUserMarkup}${roleMarkup}</div>`;
-  const sideRoleMarkup = `<div class="shrink-0 xl:hidden min-[1920px]:block">${roleMarkup}</div>`;
+  const sideRoleMarkup = `<div class="w-full shrink-0 sm:w-auto xl:hidden min-[1920px]:block">${roleMarkup}</div>`;
   const inlineCurrentUserMarkup = `<div class="xl:hidden min-[1920px]:block">${currentUserMarkup}</div>`;
   const cardInteractivityClass = profileHref
     ? "cursor-pointer transition-[border-color,background-color,transform] duration-200 hover:border-white/22 hover:bg-white/[0.03] focus:outline-none focus:ring-1 focus:ring-white/18"
@@ -10018,16 +10878,18 @@ function renderFriendCard(friend, postCount = 0) {
     : "";
 
   return `
-    <article ${cardAttributes} class="border border-white/10 bg-black/20 px-3 py-3 xl:px-2.5 xl:py-2.5 min-[1920px]:px-3 min-[1920px]:py-3 ${cardInteractivityClass}">
-      <div class="flex items-start gap-3 xl:gap-2 min-[1920px]:gap-3">
-        <img src="${escapeHtml(getFriendPhotoUrl(friend))}" alt="${escapeHtml(label)}" class="h-12 w-12 shrink-0 border border-white/10 bg-black object-cover object-center xl:h-9 xl:w-9 min-[1920px]:h-12 min-[1920px]:w-12">
-        <div class="min-w-0 flex-1 space-y-2 xl:space-y-1.5 min-[1920px]:space-y-2">
-          <div class="flex items-center gap-2">
-            ${nameMarkup}
-            ${inlineCurrentUserMarkup}
+    <article ${cardAttributes} class="overflow-hidden border border-white/10 bg-black/20 px-3 py-3 xl:px-2.5 xl:py-2.5 min-[1920px]:px-3 min-[1920px]:py-3 ${cardInteractivityClass}">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start xl:gap-2 min-[1920px]:gap-3">
+        <div class="flex min-w-0 items-start gap-3 xl:gap-2 min-[1920px]:gap-3">
+          <img src="${escapeHtml(getFriendPhotoUrl(friend))}" alt="${escapeHtml(label)}" class="h-12 w-12 shrink-0 border border-white/10 bg-black object-cover object-center xl:h-9 xl:w-9 min-[1920px]:h-12 min-[1920px]:w-12">
+          <div class="min-w-0 flex-1 space-y-2 xl:space-y-1.5 min-[1920px]:space-y-2">
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              ${nameMarkup}
+              ${inlineCurrentUserMarkup}
+            </div>
+            <p class="break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-400/74 [overflow-wrap:anywhere]">${escapeHtml(metaLabel)}</p>
+            ${stackedMetaMarkup}
           </div>
-          <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.18em] text-stone-400/74">${escapeHtml(metaLabel)}</p>
-          ${stackedMetaMarkup}
         </div>
         ${sideRoleMarkup}
       </div>
@@ -10037,19 +10899,19 @@ function renderFriendCard(friend, postCount = 0) {
 
 function renderFriendControls(friend, canDeleteProfile) {
   return `
-    <div class="flex flex-col items-start gap-2 xl:gap-1.5 min-[1920px]:gap-2">
+    <div class="flex w-full flex-col items-start gap-2 sm:w-auto xl:gap-1.5 min-[1920px]:gap-2">
       ${renderRoleSelect(friend)}
       ${
         canDeleteProfile
           ? `
-            <button
-              type="button"
-              data-action="delete-profile"
-              data-user-id="${escapeHtml(friend.uid || friend.id)}"
-              class="border border-sky-300/32 bg-sky-100/[0.03] px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-sky-100 transition hover:border-sky-200/55 hover:bg-sky-100/[0.08] xl:px-1.5 xl:py-0.5 xl:text-[0.52rem] min-[1920px]:px-2 min-[1920px]:py-1 min-[1920px]:text-[0.58rem]"
-            >
-              ${STRINGS.members.deleteProfile}
-            </button>
+              <button
+                type="button"
+                data-action="delete-profile"
+                data-user-id="${escapeHtml(friend.uid || friend.id)}"
+                class="w-full border border-sky-300/32 bg-sky-100/[0.03] px-2 py-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-sky-100 transition hover:border-sky-200/55 hover:bg-sky-100/[0.08] sm:w-auto xl:px-1.5 xl:py-0.5 xl:text-[0.52rem] min-[1920px]:px-2 min-[1920px]:py-1 min-[1920px]:text-[0.58rem]"
+              >
+                ${STRINGS.members.deleteProfile}
+              </button>
           `
           : ""
       }
@@ -10071,7 +10933,7 @@ function renderRoleSelect(friend) {
       data-action="role-select"
       data-user-id="${escapeHtml(friend.uid || friend.id)}"
       ${roleLocked ? "disabled" : ""}
-      class="border border-sky-300/28 bg-sky-100/[0.04] px-2 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-sky-100 outline-none transition focus:border-sky-200/55 xl:px-1.5 xl:py-1.5 xl:text-[0.52rem] min-[1920px]:px-2 min-[1920px]:py-2 min-[1920px]:text-[0.58rem]"
+      class="w-full border border-sky-300/28 bg-sky-100/[0.04] px-2 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.18em] text-sky-100 outline-none transition focus:border-sky-200/55 sm:w-auto xl:px-1.5 xl:py-1.5 xl:text-[0.52rem] min-[1920px]:px-2 min-[1920px]:py-2 min-[1920px]:text-[0.58rem]"
     >
       ${options.join("")}
     </select>
@@ -10464,6 +11326,59 @@ function renderFeaturedMessage() {
   loadingText.textContent = `> ${normalizeFeaturedMessage(featuredMessage)}`;
 }
 
+function renderFeaturedClip() {
+  const featuredEntry = resolveFeaturedClipEntry();
+  const shouldShow = Boolean(featuredEntry && currentRoute?.kind === ROUTE_ARCHIVE);
+
+  if (featuredClipShell) {
+    featuredClipShell.classList.toggle("hidden", !shouldShow);
+  }
+
+  if (!featuredEntry) {
+    if (featuredClipImage) {
+      featuredClipImage.removeAttribute("src");
+      featuredClipImage.alt = "";
+    }
+
+    if (featuredClipTitle) {
+      featuredClipTitle.textContent = "";
+    }
+
+    if (featuredClipContext) {
+      featuredClipContext.textContent = "";
+    }
+
+    if (featuredClipDescription) {
+      featuredClipDescription.textContent = "";
+    }
+
+    return;
+  }
+
+  const { trip, folder, item } = featuredEntry;
+  const previewImageUrl = item.posterDownloadURL || item.downloadURL || "";
+  const contextLabel = buildFolderPathLabel(trip, folder).replace(/\/$/, "").toUpperCase();
+
+  if (featuredClipImage) {
+    featuredClipImage.src = previewImageUrl;
+    featuredClipImage.alt = getItemDisplayName(item);
+  }
+
+  if (featuredClipTitle) {
+    featuredClipTitle.textContent = getItemDisplayName(item);
+  }
+
+  if (featuredClipContext) {
+    featuredClipContext.textContent = `UP FRONT // ${contextLabel}`;
+  }
+
+  if (featuredClipDescription) {
+    featuredClipDescription.textContent = item.description
+      ? item.description
+      : "ADMIN PICK // OPEN THE FEATURED CLIP IN PREVIEW.";
+  }
+}
+
 function syncFeaturedMessageForm() {
   const adminMode = isAdminViewEnabled();
 
@@ -10482,6 +11397,101 @@ function normalizeFeaturedMessage(value) {
     .slice(0, 180);
 
   return normalized || DEFAULT_FEATURED_MESSAGE;
+}
+
+function normalizeFeaturedClip(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const tripId = String(value.tripId || "");
+  const folderId = String(value.folderId || "");
+  const itemId = String(value.itemId || "");
+
+  if (!tripId || !folderId || !itemId) {
+    return null;
+  }
+
+  return { tripId, folderId, itemId };
+}
+
+function resolveFeaturedClipEntry() {
+  if (!featuredClip?.tripId || !featuredClip?.folderId || !featuredClip?.itemId) {
+    return null;
+  }
+
+  const trip = trips.find((entry) => entry.id === featuredClip.tripId) || null;
+  const folder = getFoldersForTrip(featuredClip.tripId).find((entry) => entry.id === featuredClip.folderId) || null;
+  const item = getItemsForFolder(featuredClip.tripId, featuredClip.folderId).find((entry) => entry.id === featuredClip.itemId) || null;
+
+  if (!trip || !folder || !item || !isPreviewableMediaItem(item)) {
+    return null;
+  }
+
+  return { trip, folder, item };
+}
+
+function isFeaturedClipItem(item, tripId, folderId) {
+  const sourceFolderId = resolveItemSourceFolderId(item, folderId);
+  return Boolean(
+    featuredClip &&
+      featuredClip.tripId === tripId &&
+      featuredClip.folderId === sourceFolderId &&
+      featuredClip.itemId === item?.id
+  );
+}
+
+function handleFeaturedClipOpenClick() {
+  const featuredEntry = resolveFeaturedClipEntry();
+
+  if (!featuredEntry) {
+    return;
+  }
+
+  openVideoPreview(featuredEntry.trip.id, featuredEntry.folder.id, featuredEntry.item.id, "archive");
+}
+
+function loadRecentMediaViews() {
+  try {
+    const rawValue = window.localStorage.getItem(RECENT_MEDIA_VIEW_STORAGE_KEY);
+
+    if (!rawValue) {
+      return {};
+    }
+
+    const parsed = JSON.parse(rawValue);
+    return pruneRecentMediaViews(parsed);
+  } catch {
+    return {};
+  }
+}
+
+function persistRecentMediaViews(value) {
+  try {
+    window.localStorage.setItem(
+      RECENT_MEDIA_VIEW_STORAGE_KEY,
+      JSON.stringify(pruneRecentMediaViews(value))
+    );
+  } catch {
+    // Ignore storage persistence errors.
+  }
+}
+
+function pruneRecentMediaViews(value) {
+  const cutoff = Date.now() - RECENT_MEDIA_VIEW_WINDOW_MS;
+  const nextEntries = Object.entries(value || {}).filter(([, viewedAt]) =>
+    Number(viewedAt || 0) >= cutoff
+  );
+
+  return Object.fromEntries(nextEntries);
+}
+
+function escapeCssSelectorToken(value) {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(String(value || ""));
+  }
+
+  return String(value || "").replace(/["\\]/g, "\\$&");
 }
 
 function startLogoGlitchLoop() {

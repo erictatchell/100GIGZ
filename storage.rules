@@ -66,6 +66,12 @@ service firebase.storage {
       allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
+    match /trip-covers/{tripId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isAllowedProfileUpload();
+      allow delete: if isAdmin();
+    }
+
     match /trips/{tripSlug}/{folderSlug}/{ownerUid}/{allPaths=**} {
       allow read: if true;
       allow create, update: if isMember() && request.auth.uid == ownerUid && isAllowedUpload();
