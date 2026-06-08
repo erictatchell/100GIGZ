@@ -249,8 +249,9 @@ service cloud.firestore {
     function isValidLikeCreate(likeId) {
       return isMember()
         && likeId == request.auth.uid
-        && request.resource.data.keys().hasOnly(['createdAt'])
-        && request.resource.data.createdAt is timestamp;
+        && request.resource.data.keys().hasOnly(['createdAt', 'createdAtMs'])
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.createdAtMs is number;
     }
 
     function hasValidActivityMediaFields() {

@@ -141,6 +141,7 @@ const friendsMobileTitle = document.getElementById("friends-mobile-title");
 const desktopRouteToggleLink = document.getElementById("desktop-route-toggle-link");
 const archivePage = document.getElementById("archive-page");
 const profilePage = document.getElementById("profile-page");
+const feedPage = document.getElementById("feed-page");
 const membersPage = document.getElementById("members-page");
 const privacyPage = document.getElementById("privacy-page");
 const tosPage = document.getElementById("tos-page");
@@ -170,6 +171,11 @@ const profileActivityImageInput = document.getElementById("profile-activity-imag
 const profileActivitySubmit = document.getElementById("profile-activity-submit");
 const profileActivityStatus = document.getElementById("profile-activity-status");
 const profileActivityList = document.getElementById("profile-activity-list");
+const feedPageStatus = document.getElementById("feed-page-status");
+const feedAllCount = document.getElementById("feed-all-count");
+const feedYourCount = document.getElementById("feed-your-count");
+const feedAllList = document.getElementById("feed-all-list");
+const feedYourList = document.getElementById("feed-your-list");
 const membersPageStatus = document.getElementById("members-page-status");
 const membersPageCount = document.getElementById("members-page-count");
 const membersPageOnline = document.getElementById("members-page-online");
@@ -305,6 +311,7 @@ const ROLE_ADMIN = "admin";
 const ROUTE_ARCHIVE = "archive";
 const ROUTE_PROFILE_SELF = "profile-self";
 const ROUTE_PROFILE_PUBLIC = "profile-public";
+const ROUTE_FEED = "feed";
 const ROUTE_MEMBERS = "members";
 const ROUTE_PRIVACY = "privacy";
 const ROUTE_TOS = "tos";
@@ -387,6 +394,12 @@ let currentProfileActivityUid = "";
 let profileActivityUnsubscribe = null;
 let profileActivityByUser = new Map();
 let profileSelectedFolders = new Map();
+let feedActivityUnsubscribe = null;
+let feedItemUnsubscribe = null;
+let feedRootActivities = [];
+let feedUploadItems = [];
+let feedReplyEntries = [];
+let feedLikeEvents = [];
 let mediaCommentAggregateUnsubscribe = null;
 let threadReplyAggregateUnsubscribe = null;
 let likeAggregateUnsubscribe = null;
@@ -681,6 +694,7 @@ async function initialize() {
     // Let the main archive/profile shell paint before attaching the sitewide aggregate listeners.
     window.requestAnimationFrame(() => {
       subscribeToInteractionAggregates();
+      subscribeToFeedStreams();
     });
   } else {
     showWarning(STRINGS.errors.runtimeConfigMissing);
@@ -1263,7 +1277,7 @@ function initializeAuthListener() {
       syncProfileActivitySubscription("");
       adminPanelsVisible = false;
       setMobileMenuOpen(false);
-      if (currentRoute?.kind === ROUTE_PROFILE_SELF) {
+      if (currentRoute?.kind === ROUTE_PROFILE_SELF || isFeedRoute()) {
         navigateToRoute(ROUTE_ARCHIVE, { replace: true });
       }
     }
@@ -1359,6 +1373,10 @@ function setupForms() {
   profileRouteInput?.addEventListener("input", handleProfileRouteInput);
   profileActivityList?.addEventListener("click", handleSocialCommentActionClick);
   profileActivityList?.addEventListener("submit", handleSocialCommentEditSubmit);
+  feedAllList?.addEventListener("click", handleSocialCommentActionClick);
+  feedAllList?.addEventListener("submit", handleSocialCommentEditSubmit);
+  feedYourList?.addEventListener("click", handleSocialCommentActionClick);
+  feedYourList?.addEventListener("submit", handleSocialCommentEditSubmit);
   profileTripList?.addEventListener("click", handleProfileTripBrowserClick);
   profileTripList?.addEventListener("change", handleProfileTripBrowserChange);
   friendsDesktopList?.addEventListener("change", handleRoleSelectChange);
@@ -1418,7 +1436,7 @@ function handleMobileMenuActivityClick() {
     return;
   }
 
-  navigateFromMobileMenu(getOwnProfileRoute());
+  navigateFromMobileMenu({ kind: ROUTE_FEED });
 }
 
 function handleMobileMenuMembersClick() {
@@ -1718,7 +1736,7 @@ function handleWindowPopstate() {
 function handleRouteToggleClick() {
   beginRouteLoadingOverlay();
   navigateToRoute(
-    isProfileRoute() || isMembersRoute() || isLegalRoute() ? ROUTE_ARCHIVE : getOwnProfileRoute()
+    isProfileRoute() || isMembersRoute() || isFeedRoute() || isLegalRoute() ? ROUTE_ARCHIVE : getOwnProfileRoute()
   );
 }
 
@@ -1738,6 +1756,10 @@ function normalizeRoute(pathname) {
 
   if (segment.toLowerCase() === ROUTE_MEMBERS) {
     return { kind: ROUTE_MEMBERS };
+  }
+
+  if (segment.toLowerCase() === ROUTE_FEED) {
+    return { kind: ROUTE_FEED };
   }
 
   if (segment.toLowerCase() === ROUTE_PRIVACY) {
@@ -1789,6 +1811,10 @@ function normalizeNextRoute(route) {
     return { kind: ROUTE_MEMBERS };
   }
 
+  if (route === ROUTE_FEED || route?.kind === ROUTE_FEED) {
+    return { kind: ROUTE_FEED };
+  }
+
   if (route === ROUTE_PRIVACY || route?.kind === ROUTE_PRIVACY) {
     return { kind: ROUTE_PRIVACY };
   }
@@ -1811,6 +1837,10 @@ function resolveRoutePath(route = currentRoute) {
 
   if (route?.kind === ROUTE_MEMBERS) {
     return "/members";
+  }
+
+  if (route?.kind === ROUTE_FEED) {
+    return "/feed";
   }
 
   if (route?.kind === ROUTE_PRIVACY) {
@@ -1842,6 +1872,10 @@ function isLegalRoute(route = currentRoute) {
 
 function isMembersRoute(route = currentRoute) {
   return route?.kind === ROUTE_MEMBERS;
+}
+
+function isFeedRoute(route = currentRoute) {
+  return route?.kind === ROUTE_FEED;
 }
 
 function getOwnProfileRoute() {
@@ -3031,6 +3065,9 @@ async function handleActivitySourceClick(trigger) {
       threadCommentId: threadContext?.activityId || "",
       threadOwnerUid: threadContext?.threadOwnerUid || "",
     });
+    if (threadContext?.activityId) {
+      schedulePreviewCommentHighlight(threadContext.activityId);
+    }
     return;
   }
 
@@ -3088,6 +3125,46 @@ async function resolveActivitySourceItem(context) {
 
   item = getCurrentItem();
   return item;
+}
+
+function schedulePreviewCommentHighlight(activityId) {
+  const targetId = String(activityId || "");
+
+  if (!targetId) {
+    return;
+  }
+
+  let attempts = 0;
+  const escapedTargetId = window.CSS?.escape ? window.CSS.escape(targetId) : targetId.replace(/"/g, '\\"');
+  const selector = `[data-thread-root-entry="${escapedTargetId}"], [data-media-comment-id="${escapedTargetId}"]`;
+
+  const highlightWhenReady = () => {
+    attempts += 1;
+    const target = videoPreviewShell?.querySelector(selector);
+
+    if (!target && attempts < 12) {
+      window.setTimeout(highlightWhenReady, 120);
+      return;
+    }
+
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    target.style.transition = "border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease";
+    target.style.borderColor = "rgba(186,230,253,0.68)";
+    target.style.backgroundColor = "rgba(186,230,253,0.08)";
+    target.style.boxShadow = "0 0 0 1px rgba(186,230,253,0.22), 0 0 28px rgba(125,211,252,0.14)";
+
+    window.setTimeout(() => {
+      target.style.borderColor = "";
+      target.style.backgroundColor = "";
+      target.style.boxShadow = "";
+    }, 1800);
+  };
+
+  window.requestAnimationFrame(highlightWhenReady);
 }
 
 async function openThreadDialog(trigger) {
@@ -3511,6 +3588,68 @@ function subscribeToInteractionAggregates() {
   subscribeToLikeAggregates();
 }
 
+function subscribeToFeedStreams() {
+  if (!db || !runtimeConfig?.collections?.users) {
+    return;
+  }
+
+  subscribeToFeedRootActivities();
+  subscribeToFeedUploads();
+}
+
+function subscribeToFeedRootActivities() {
+  feedActivityUnsubscribe?.();
+
+  feedActivityUnsubscribe = onSnapshot(
+    collectionGroup(db, "activity"),
+    (snapshot) => {
+      feedRootActivities = snapshot.docs
+        .map((activityDoc) => {
+          const pathSegments = activityDoc.ref.path.split("/");
+          const activityOwnerUid = String(pathSegments[1] || "");
+          return normalizeActivityEntry({
+            id: activityDoc.id,
+            activityOwnerUid,
+            ...activityDoc.data(),
+          });
+        })
+        .sort(compareFeedEntriesByTime);
+      renderFeedPageIfVisible();
+    },
+    (error) => {
+      console.warn("Could not subscribe to feed activity.", error);
+      setFeedStatus(getFriendlyFirestoreMessage(error).toUpperCase());
+    }
+  );
+}
+
+function subscribeToFeedUploads() {
+  feedItemUnsubscribe?.();
+
+  feedItemUnsubscribe = onSnapshot(
+    collectionGroup(db, "items"),
+    (snapshot) => {
+      feedUploadItems = snapshot.docs
+        .map((itemDoc) => {
+          const pathSegments = itemDoc.ref.path.split("/");
+          return normalizeItem({
+            id: itemDoc.id,
+            tripId: String(pathSegments[1] || ""),
+            folderId: String(pathSegments[3] || ""),
+            ...itemDoc.data(),
+          });
+        })
+        .filter((item) => item.kind === "file")
+        .sort(compareFeedEntriesByTime);
+      renderFeedPageIfVisible();
+    },
+    (error) => {
+      console.warn("Could not subscribe to feed uploads.", error);
+      setFeedStatus(getFriendlyFirestoreMessage(error).toUpperCase());
+    }
+  );
+}
+
 function subscribeToMediaCommentAggregates() {
   mediaCommentAggregateUnsubscribe?.();
 
@@ -3555,6 +3694,7 @@ function subscribeToThreadReplyAggregates() {
     collectionGroup(db, "replies"),
     (snapshot) => {
       const nextReplyCountsByThreadKey = new Map();
+      const nextFeedReplyEntries = [];
 
       snapshot.docs.forEach((replyDoc) => {
         const pathSegments = replyDoc.ref.path.split("/");
@@ -3570,9 +3710,19 @@ function subscribeToThreadReplyAggregates() {
           threadKey,
           Number(nextReplyCountsByThreadKey.get(threadKey) || 0) + 1
         );
+
+        nextFeedReplyEntries.push(
+          normalizeThreadReply({
+            id: replyDoc.id,
+            threadOwnerUid,
+            activityId,
+            ...replyDoc.data(),
+          })
+        );
       });
 
       replyCountsByThreadKey = nextReplyCountsByThreadKey;
+      feedReplyEntries = nextFeedReplyEntries.sort(compareFeedEntriesByTime);
       rebuildMediaReplyCountsByItemKey();
       scheduleInteractionRefresh();
     },
@@ -3589,6 +3739,7 @@ function subscribeToLikeAggregates() {
     collectionGroup(db, "likes"),
     (snapshot) => {
       const nextLikeActorsByTargetKey = new Map();
+      const nextFeedLikeEvents = [];
 
       snapshot.docs.forEach((likeDoc) => {
         const targetKey = buildLikeTargetKeyFromPath(likeDoc.ref.path);
@@ -3603,9 +3754,11 @@ function subscribeToLikeAggregates() {
         }
 
         nextLikeActorsByTargetKey.get(targetKey).add(actorUid);
+        nextFeedLikeEvents.push(normalizeFeedLikeEvent(likeDoc));
       });
 
       likeActorsByTargetKey = nextLikeActorsByTargetKey;
+      feedLikeEvents = nextFeedLikeEvents.filter(Boolean).sort(compareFeedEntriesByTime);
       scheduleInteractionRefresh();
     },
     (error) => {
@@ -5877,6 +6030,65 @@ function buildLikeTargetKeyFromPath(path) {
   return "";
 }
 
+function normalizeFeedLikeEvent(likeDoc) {
+  if (!likeDoc?.ref?.path) {
+    return null;
+  }
+
+  const path = String(likeDoc.ref.path || "");
+  const segments = path.split("/");
+  const data = likeDoc.data ? likeDoc.data() : {};
+  const targetKey = buildLikeTargetKeyFromPath(path);
+  const baseEvent = {
+    id: String(likeDoc.id || ""),
+    actorUid: String(likeDoc.id || ""),
+    targetKey,
+    createdAtMs: coerceTimestampToMs(data?.createdAt, data?.createdAtMs),
+  };
+
+  if (segments.length === 8 && segments[0] === "trips" && segments[6] === "likes") {
+    return {
+      ...baseEvent,
+      targetKind: "media-item",
+      tripId: String(segments[1] || ""),
+      folderId: String(segments[3] || ""),
+      itemId: String(segments[5] || ""),
+    };
+  }
+
+  if (segments.length === 10 && segments[0] === "trips" && segments[6] === "comments" && segments[8] === "likes") {
+    return {
+      ...baseEvent,
+      targetKind: "media-comment",
+      tripId: String(segments[1] || ""),
+      folderId: String(segments[3] || ""),
+      itemId: String(segments[5] || ""),
+      commentId: String(segments[7] || ""),
+    };
+  }
+
+  if (segments.length === 6 && segments[0] === "users" && segments[4] === "likes") {
+    return {
+      ...baseEvent,
+      targetKind: "wall-post",
+      threadOwnerUid: String(segments[1] || ""),
+      activityId: String(segments[3] || ""),
+    };
+  }
+
+  if (segments.length === 8 && segments[0] === "users" && segments[4] === "replies" && segments[6] === "likes") {
+    return {
+      ...baseEvent,
+      targetKind: "thread-reply",
+      threadOwnerUid: String(segments[1] || ""),
+      activityId: String(segments[3] || ""),
+      replyId: String(segments[5] || ""),
+    };
+  }
+
+  return null;
+}
+
 function renderVideoPreviewComments(previewState = getCurrentVideoPreviewState()) {
   const context = buildMediaCommentContext(previewState);
   const comments = context ? mediaCommentsByKey.get(context.key) || [] : [];
@@ -5976,7 +6188,7 @@ videoPreviewLikeButton.innerHTML = `
 `;
 
   videoPreviewLikeButton.className = liked
-    ? "shrink-0 inline-flex items-center justify-center border border-amber-200/35 bg-amber-100/[0.07] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-amber-50 transition hover:border-amber-100/55 hover:bg-amber-100/[0.12] disabled:cursor-not-allowed disabled:opacity-45"
+    ? "shrink-0 inline-flex items-center justify-center border border-sky-200/45 bg-sky-100/[0.08] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-sky-50 transition hover:border-sky-100/65 hover:bg-sky-100/[0.14] disabled:cursor-not-allowed disabled:opacity-45"
     : "shrink-0 inline-flex items-center justify-center border border-white/12 bg-white/[0.03] px-3 py-2 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.18em] text-stone-100 transition hover:border-white/30 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45";
 
   videoPreviewLikeButton.disabled = !counts?.itemKey;
@@ -6015,7 +6227,7 @@ function renderMediaComment(comment, options = {}) {
   const articleClass = "border border-white/10 bg-black/24 p-3";
 
   return `
-    <article class="${articleClass}">
+    <article class="${articleClass}" data-media-comment-id="${escapeHtml(comment.id)}">
       <div class="flex items-start gap-3">
         <img src="${escapeHtml(getSocialPhotoUrl(comment.authorPhotoURL))}" alt="${escapeHtml(comment.authorLabel)}" class="h-9 w-9 shrink-0 border border-white/10 bg-black object-cover object-center">
         <div class="min-w-0 flex-1">
@@ -6262,6 +6474,7 @@ function normalizeActivityEntry(entry) {
     actorLabel: normalizeSocialLabel(entry?.actorLabel),
     actorRouteId: normalizeRouteId(entry?.actorRouteId),
     actorPhotoURL: String(entry?.actorPhotoURL || ""),
+    activityOwnerUid: String(entry?.activityOwnerUid || ""),
     targetUserUid: String(entry?.targetUserUid || ""),
     targetUserLabel: normalizeSocialLabel(entry?.targetUserLabel),
     tripId: String(entry?.tripId || ""),
@@ -6492,7 +6705,7 @@ function renderThreadRootEntry(entry, options = {}) {
     : "";
 
   return `
-    <article class="border border-white/10 bg-black/20 p-3 sm:p-4">
+    <article class="border border-white/10 bg-black/20 p-3 sm:p-4" data-thread-root-entry="${escapeHtml(entry.id)}">
       <div class="flex items-start gap-3">
         <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-10 w-10 shrink-0 border border-white/10 bg-black object-cover object-center">
         <div class="min-w-0 flex-1">
@@ -7266,6 +7479,12 @@ function renderVisibleRouteContent() {
     if (membersPageList) {
       membersPageList.innerHTML = "";
     }
+    if (feedAllList) {
+      feedAllList.innerHTML = "";
+    }
+    if (feedYourList) {
+      feedYourList.innerHTML = "";
+    }
     return;
   }
 
@@ -7277,6 +7496,12 @@ function renderVisibleRouteContent() {
   if (isMembersRoute()) {
     syncProfileActivitySubscription("");
     renderMembersPage();
+    return;
+  }
+
+  if (isFeedRoute()) {
+    syncProfileActivitySubscription("");
+    renderFeedPage();
     return;
   }
 
@@ -7400,6 +7625,7 @@ async function toggleLikeAtRef(likeRef) {
 
   await setDoc(likeRef, {
     createdAt: serverTimestamp(),
+    createdAtMs: Date.now(),
   });
 
   return true;
@@ -7579,6 +7805,10 @@ function setSocialSurfaceStatus(message) {
     setVideoPreviewCommentStatus(message);
   }
 
+  if (isFeedRoute()) {
+    setFeedStatus(message);
+  }
+
   if (isProfileRoute()) {
     setProfileActivityStatus(message);
   }
@@ -7602,7 +7832,7 @@ function getSocialMenuItemButtonClass(tone = "default") {
 
 function getSocialLikeButtonClass(liked = false) {
   return liked
-    ? "inline-flex border border-amber-200/35 bg-amber-100/[0.07] px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-amber-50 transition hover:border-amber-100/55 hover:bg-amber-100/[0.12] disabled:cursor-not-allowed disabled:opacity-45"
+    ? "inline-flex border border-sky-200/45 bg-sky-100/[0.08] px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-sky-50 transition hover:border-sky-100/65 hover:bg-sky-100/[0.14] disabled:cursor-not-allowed disabled:opacity-45"
     : getSocialActionButtonClass();
 }
 
@@ -9018,14 +9248,14 @@ function renderAuth() {
 
   if (desktopRouteToggleLink) {
     desktopRouteToggleLink.textContent =
-      isProfileRoute() || isMembersRoute() || isLegalRoute()
+      isProfileRoute() || isMembersRoute() || isFeedRoute() || isLegalRoute()
         ? STRINGS.auth.archive
         : STRINGS.auth.profile;
   }
 
   if (bannerRouteToggleLink) {
     bannerRouteToggleLink.textContent =
-      isProfileRoute() || isMembersRoute() || isLegalRoute()
+      isProfileRoute() || isMembersRoute() || isFeedRoute() || isLegalRoute()
         ? STRINGS.auth.archive
         : STRINGS.auth.profile;
   }
@@ -9082,12 +9312,14 @@ function renderAuth() {
 function renderCurrentPage() {
   const showArchive = currentRoute?.kind === ROUTE_ARCHIVE && canUploadMedia();
   const showProfile = isProfileRoute() && canUploadMedia();
+  const showFeed = isFeedRoute() && canUploadMedia();
   const showMembers = isMembersRoute() && canUploadMedia();
   const showPrivacy = currentRoute?.kind === ROUTE_PRIVACY;
   const showTos = currentRoute?.kind === ROUTE_TOS;
 
   archivePage?.classList.toggle("hidden", !showArchive);
   profilePage?.classList.toggle("hidden", !showProfile);
+  feedPage?.classList.toggle("hidden", !showFeed);
   membersPage?.classList.toggle("hidden", !showMembers);
   privacyPage?.classList.toggle("hidden", !showPrivacy);
   tosPage?.classList.toggle("hidden", !showTos);
@@ -9148,7 +9380,7 @@ function syncControlPanelVisibility() {
   const signedIn = canUploadMedia();
   const adminMode = signedIn && isAdminViewEnabled();
 
-  adminPanel?.classList.toggle("hidden", !adminMode || isProfileRoute() || isMembersRoute() || isLegalRoute());
+  adminPanel?.classList.toggle("hidden", !adminMode || isProfileRoute() || isMembersRoute() || isFeedRoute() || isLegalRoute());
   featuredMessageForm?.classList.toggle("hidden", !adminMode);
   tripForm?.classList.toggle("hidden", !adminMode);
   folderForm?.classList.toggle("hidden", !adminMode);
@@ -9196,6 +9428,535 @@ function renderMembersPage() {
           .join("")
       : renderEmptySocialState(STRINGS.members.empty);
   }
+}
+
+function renderFeedPageIfVisible() {
+  if (isFeedRoute()) {
+    renderFeedPage();
+  }
+}
+
+function renderFeedPage() {
+  if (!canUploadMedia()) {
+    setFeedStatus("SIGN IN TO VIEW ACTIVITY.");
+    if (feedAllList) {
+      feedAllList.innerHTML = "";
+    }
+    if (feedYourList) {
+      feedYourList.innerHTML = "";
+    }
+    return;
+  }
+
+  const allEntries = buildAllFeedEntries();
+  const yourEntries = buildYourFeedEntries(allEntries);
+
+  setFeedStatus(
+    allEntries.length > 0
+      ? `${buildCountLabel(allEntries.length, "ACTIVITY")} // ${buildCountLabel(yourEntries.length, "PERSONAL")}`
+      : "NO ACTIVITY YET."
+  );
+
+  if (feedAllCount) {
+    feedAllCount.textContent = buildCountLabel(allEntries.length, "ITEM");
+  }
+
+  if (feedYourCount) {
+    feedYourCount.textContent = buildCountLabel(yourEntries.length, "ITEM");
+  }
+
+  if (feedAllList) {
+    feedAllList.innerHTML = allEntries.length > 0
+      ? allEntries.map((entry) => renderFeedEntry(entry, "all")).join("")
+      : renderEmptySocialState("NO ACTIVITY YET.");
+  }
+
+  if (feedYourList) {
+    feedYourList.innerHTML = yourEntries.length > 0
+      ? yourEntries.map((entry) => renderFeedEntry(entry, "yours")).join("")
+      : renderEmptySocialState("NOTHING FOR YOU YET.");
+  }
+}
+
+function setFeedStatus(message) {
+  if (feedPageStatus) {
+    feedPageStatus.textContent = message || "";
+  }
+}
+
+function buildAllFeedEntries() {
+  const rootEntries = getUniqueFeedRootActivities()
+    .filter((entry) => entry.type === "media-comment" || entry.type === "wall-post")
+    .map((entry) => ({ ...entry, feedType: entry.type }));
+  const uploadEntries = feedUploadItems
+    .filter((item) => item.kind === "file")
+    .map((item) => buildUploadFeedEntry(item))
+    .filter(Boolean);
+
+  return [...rootEntries, ...uploadEntries]
+    .sort(compareFeedEntriesByTime)
+    .slice(0, 120);
+}
+
+function buildYourFeedEntries(allEntries = buildAllFeedEntries()) {
+  const uid = String(currentUser?.uid || "");
+
+  if (!uid) {
+    return [];
+  }
+
+  const rootEntries = getUniqueFeedRootActivities();
+  const rootByThreadKey = new Map(
+    rootEntries
+      .map((entry) => [buildThreadKey(getThreadOwnerUid(entry), entry.id), entry])
+      .filter(([threadKey]) => Boolean(threadKey))
+  );
+  const participantThreadKeys = new Set();
+
+  rootByThreadKey.forEach((entry, threadKey) => {
+    if (isRootFeedEntryRelevantToUser(entry, uid)) {
+      participantThreadKeys.add(threadKey);
+    }
+  });
+
+  feedReplyEntries.forEach((reply) => {
+    if (reply.actorUid === uid) {
+      const threadKey = buildThreadKey(reply.threadOwnerUid, reply.activityId);
+      if (threadKey) {
+        participantThreadKeys.add(threadKey);
+      }
+    }
+  });
+
+  const personalRoots = rootEntries
+    .filter((entry) => isRootFeedEntryRelevantToUser(entry, uid))
+    .map((entry) => ({ ...entry, feedType: entry.type }));
+  const personalReplies = feedReplyEntries
+    .filter((reply) => {
+      const threadKey = buildThreadKey(reply.threadOwnerUid, reply.activityId);
+      return reply.actorUid === uid || participantThreadKeys.has(threadKey);
+    })
+    .map((reply) => ({
+      ...reply,
+      feedType: "thread-reply",
+      rootEntry: rootByThreadKey.get(buildThreadKey(reply.threadOwnerUid, reply.activityId)) || null,
+    }));
+  const personalLikes = buildPersonalLikeFeedEntries(uid);
+
+  return [...personalRoots, ...personalReplies, ...personalLikes]
+    .sort(compareFeedEntriesByTime)
+    .slice(0, 120);
+}
+
+function getUniqueFeedRootActivities() {
+  const byKey = new Map();
+
+  feedRootActivities.forEach((entry) => {
+    if (!entry?.id || !entry?.type) {
+      return;
+    }
+
+    const key = `${entry.type}:${entry.id}`;
+    const existing = byKey.get(key);
+
+    if (!existing || shouldPreferFeedActivityDoc(entry, existing)) {
+      byKey.set(key, entry);
+    }
+  });
+
+  return [...byKey.values()].sort(compareFeedEntriesByTime);
+}
+
+function shouldPreferFeedActivityDoc(nextEntry, existingEntry) {
+  if (nextEntry.type === "wall-post") {
+    return nextEntry.activityOwnerUid === nextEntry.targetUserUid && existingEntry.activityOwnerUid !== existingEntry.targetUserUid;
+  }
+
+  return Number(nextEntry.createdAtMs || 0) > Number(existingEntry.createdAtMs || 0);
+}
+
+function isRootFeedEntryRelevantToUser(entry, uid) {
+  if (!entry || !uid) {
+    return false;
+  }
+
+  if (entry.type === "wall-post") {
+    return entry.actorUid === uid || entry.targetUserUid === uid;
+  }
+
+  if (entry.type === "media-comment") {
+    return (
+      getSocialCommentAuthorUid(entry) === uid ||
+      isFeedMediaItemAuthoredByUser(entry.tripId, entry.folderId, entry.itemId, uid)
+    );
+  }
+
+  return false;
+}
+
+function buildUploadFeedEntry(item) {
+  if (!item?.id) {
+    return null;
+  }
+
+  const trip = trips.find((entry) => entry.id === item.tripId) || null;
+  const folder = getFoldersForTrip(item.tripId).find((entry) => entry.id === item.folderId) || null;
+  const authorFriend = resolveItemAuthorFriend(item);
+  const actorUid = getItemAuthorUid(item);
+  const actorLabel = resolveItemAuthorLabel(item) || STRINGS.brand;
+
+  return {
+    id: `upload:${item.tripId}:${item.folderId}:${item.id}`,
+    feedType: "upload",
+    type: "upload",
+    item,
+    itemId: item.id,
+    itemName: getItemDisplayName(item),
+    tripId: item.tripId,
+    folderId: item.folderId,
+    sourceLabel: buildFolderPathLabel(trip, folder).replace(/\/$/, ""),
+    actorUid,
+    actorLabel,
+    actorRouteId: getItemAuthorRouteId(item),
+    actorPhotoURL: authorFriend ? getFriendPhotoUrl(authorFriend) : "",
+    createdAtMs: item.createdAtMs,
+  };
+}
+
+function buildPersonalLikeFeedEntries(uid) {
+  return feedLikeEvents
+    .map((event) => buildPersonalLikeFeedEntry(event, uid))
+    .filter(Boolean);
+}
+
+function buildPersonalLikeFeedEntry(event, uid) {
+  if (!event || !uid || event.actorUid === uid) {
+    return null;
+  }
+
+  const target = resolveLikeFeedTarget(event);
+
+  if (!target || target.authorUid !== uid) {
+    return null;
+  }
+
+  const actorFriend = getFriendByUid(event.actorUid);
+
+  return {
+    id: `like:${event.targetKey}:${event.actorUid}`,
+    feedType: "like",
+    type: "feed-like",
+    targetKind: event.targetKind,
+    target,
+    actorUid: event.actorUid,
+    actorLabel: getFriendLabel(actorFriend) || event.actorUid,
+    actorRouteId: normalizeRouteId(actorFriend?.routeId),
+    actorPhotoURL: getFriendPhotoUrl(actorFriend),
+    createdAtMs: event.createdAtMs,
+  };
+}
+
+function resolveLikeFeedTarget(event) {
+  if (event.targetKind === "media-item") {
+    const item = getFeedMediaItem(event.tripId, event.folderId, event.itemId);
+
+    if (!item) {
+      return null;
+    }
+
+    return {
+      kind: "media",
+      label: getItemDisplayName(item),
+      sourceLabel: buildItemSourceLabel(event.tripId, event.folderId),
+      authorUid: getItemAuthorUid(item),
+      tripId: event.tripId,
+      folderId: event.folderId,
+      itemId: event.itemId,
+      item,
+    };
+  }
+
+  if (event.targetKind === "wall-post" || event.targetKind === "media-comment") {
+    const rootEntry = getUniqueFeedRootActivities().find((entry) =>
+      event.targetKind === "wall-post"
+        ? entry.id === event.activityId && entry.type === "wall-post"
+        : entry.id === event.commentId && entry.type === "media-comment"
+    );
+
+    if (!rootEntry) {
+      return null;
+    }
+
+    return {
+      kind: rootEntry.type === "wall-post" ? "wall post" : "comment",
+      label: rootEntry.type === "media-comment" ? rootEntry.itemName || "MEDIA COMMENT" : "WALL POST",
+      sourceLabel: rootEntry.sourceLabel || buildThreadContextLabel(rootEntry),
+      authorUid: rootEntry.actorUid || rootEntry.authorUid,
+      rootEntry,
+    };
+  }
+
+  if (event.targetKind === "thread-reply") {
+    const reply = feedReplyEntries.find(
+      (entry) =>
+        entry.threadOwnerUid === event.threadOwnerUid &&
+        entry.activityId === event.activityId &&
+        entry.id === event.replyId
+    );
+
+    if (!reply) {
+      return null;
+    }
+
+    return {
+      kind: "reply",
+      label: "THREAD REPLY",
+      sourceLabel: "",
+      authorUid: reply.actorUid,
+      reply,
+    };
+  }
+
+  return null;
+}
+
+function renderFeedEntry(entry, scope = "all") {
+  if (entry.feedType === "upload") {
+    return renderUploadFeedEntry(entry);
+  }
+
+  if (entry.feedType === "thread-reply") {
+    return renderReplyFeedEntry(entry);
+  }
+
+  if (entry.feedType === "like") {
+    return renderLikeFeedEntry(entry);
+  }
+
+  return renderRootFeedEntry(entry, scope);
+}
+
+function renderRootFeedEntry(entry, scope = "all") {
+  const actorMarkup = renderSocialActorLink(
+    entry.actorLabel,
+    entry.actorRouteId,
+    "text-stone-100 transition hover:text-white hover:underline"
+  );
+  const controlsMarkup = entry.type === "media-comment"
+    ? renderSocialCommentControls(entry)
+    : renderWallPostControls(entry);
+  const bodyMarkup = entry.type === "media-comment" && isEditingSocialComment(entry)
+    ? renderSocialCommentEditForm(entry)
+    : entry.type === "wall-post" && isEditingWallPost(entry)
+      ? renderWallPostEditForm(entry)
+      : `${renderSocialBody(entry.body)}${renderSocialAttachment(entry)}`;
+  const sourceCardMarkup = entry.type === "media-comment"
+    ? renderFeedMediaSourceCard(entry)
+    : "";
+  const threadButtonMarkup = entry.type === "wall-post" ? renderThreadOpenButton(entry) : "";
+  const interactionMarkup = renderSocialInteractionBar(entry);
+  const articleAttrs = entry.type === "media-comment" ? renderActivitySourceAttributes(entry) : "";
+  const articleActionClass = entry.type === "media-comment"
+    ? "cursor-pointer transition hover:border-white/22 hover:bg-black/32"
+    : "";
+  const actionLabel = entry.type === "media-comment"
+    ? "COMMENTED ON MEDIA"
+    : buildActivityActionLabel(entry, getFriendByUid(entry.targetUserUid), entry.targetUserUid === currentUser?.uid);
+
+  return `
+    <article class="border border-white/10 bg-black/24 p-3 sm:p-4 ${articleActionClass}" ${articleAttrs}>
+      <div class="flex items-start gap-3">
+        <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-10 w-10 shrink-0 border border-white/10 bg-black object-cover object-center">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
+              ${actorMarkup}
+              <span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry.createdAtMs))}</span>
+              ${scope === "yours" ? `<span class="text-sky-100/62">YOUR ACTIVITY</span>` : ""}
+            </div>
+            ${controlsMarkup}
+          </div>
+          <p class="mt-1 break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-300/58">${escapeHtml(actionLabel)}</p>
+          ${bodyMarkup}
+          ${sourceCardMarkup}
+          ${interactionMarkup}
+          ${threadButtonMarkup}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderUploadFeedEntry(entry) {
+  const actorMarkup = renderSocialActorLink(
+    entry.actorLabel,
+    entry.actorRouteId,
+    "text-stone-100 transition hover:text-white hover:underline"
+  );
+  const previewUrl = getFeedItemPreviewUrl(entry.item);
+  const sourceAttrs = renderActivitySourceAttributes({ ...entry, id: "" });
+
+  return `
+    <article class="border border-white/10 bg-black/24 p-3 sm:p-4">
+      <div class="flex items-start gap-3">
+        <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-10 w-10 shrink-0 border border-white/10 bg-black object-cover object-center">
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
+            ${actorMarkup}
+            <span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry.createdAtMs))}</span>
+          </div>
+          <p class="mt-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-300/58">UPLOADED MEDIA</p>
+          <button type="button" ${sourceAttrs} class="mt-3 flex w-full min-w-0 items-stretch overflow-hidden border border-white/10 bg-black/30 text-left transition hover:border-white/24 hover:bg-black/38">
+            ${previewUrl ? `<img src="${escapeHtml(previewUrl)}" alt="" class="h-20 w-24 shrink-0 object-cover">` : `<span class="flex h-20 w-24 shrink-0 items-center justify-center bg-white/[0.04] text-[0.58rem] uppercase tracking-[0.14em] text-stone-400/70">Media</span>`}
+            <span class="min-w-0 flex-1 px-3 py-2">
+              <span class="block break-words text-sm uppercase tracking-[0.12em] text-stone-100 [overflow-wrap:anywhere]">${escapeHtml(entry.itemName)}</span>
+              <span class="mt-1 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.14em] text-stone-400/72">${escapeHtml(entry.sourceLabel)}</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderReplyFeedEntry(entry) {
+  const actorMarkup = renderSocialActorLink(
+    entry.actorLabel,
+    entry.actorRouteId,
+    "text-stone-100 transition hover:text-white hover:underline"
+  );
+  const rootEntry = entry.rootEntry || getRootActivityByThread(entry.threadOwnerUid, entry.activityId);
+  const sourceCardMarkup = rootEntry?.type === "media-comment"
+    ? renderFeedMediaSourceCard(rootEntry)
+    : "";
+  const threadContext = {
+    threadOwnerUid: entry.threadOwnerUid,
+    activityId: entry.activityId,
+  };
+
+  return `
+    <article class="border border-white/10 border-l-sky-200/20 bg-black/24 p-3 sm:p-4">
+      <div class="flex items-start gap-3">
+        <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-9 w-9 shrink-0 border border-white/10 bg-black object-cover object-center">
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
+            ${actorMarkup}
+            <span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry.createdAtMs))}</span>
+          </div>
+          <p class="mt-1 break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-300/58">${escapeHtml(buildReplyFeedContextLabel(rootEntry))}</p>
+          ${renderSocialBody(entry.body)}
+          ${renderSocialAttachment(entry)}
+          ${sourceCardMarkup}
+          ${renderSocialInteractionBar(entry, { includeReplyCount: false })}
+          <div class="mt-3">
+            <button type="button" data-action="open-thread" ${renderThreadActionAttributes(threadContext)} class="${getSocialActionButtonClass()}">
+              Thread
+            </button>
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderLikeFeedEntry(entry) {
+  const actorMarkup = renderSocialActorLink(
+    entry.actorLabel,
+    entry.actorRouteId,
+    "text-stone-100 transition hover:text-white hover:underline"
+  );
+  const target = entry.target || {};
+  const sourceAttrs = target.tripId && target.folderId && target.itemId
+    ? renderActivitySourceAttributes({
+        tripId: target.tripId,
+        folderId: target.folderId,
+        itemId: target.itemId,
+        id: "",
+      })
+    : "";
+
+  return `
+    <article class="border border-sky-200/18 bg-sky-100/[0.035] p-3 sm:p-4">
+      <div class="flex items-start gap-3">
+        <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-9 w-9 shrink-0 border border-sky-100/16 bg-black object-cover object-center">
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
+            ${actorMarkup}
+            <span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry.createdAtMs))}</span>
+          </div>
+          <p class="mt-1 break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-sky-100/72">LIKED YOUR ${escapeHtml(String(target.kind || "POST").toUpperCase())}</p>
+          <button type="button" ${sourceAttrs} class="mt-3 block w-full border border-white/10 bg-black/22 px-3 py-2 text-left transition hover:border-white/24 hover:bg-black/34 ${sourceAttrs ? "" : "pointer-events-none"}">
+            <span class="block break-words text-sm uppercase tracking-[0.12em] text-stone-100 [overflow-wrap:anywhere]">${escapeHtml(target.label || "ACTIVITY")}</span>
+            ${target.sourceLabel ? `<span class="mt-1 block font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.14em] text-stone-400/72">${escapeHtml(target.sourceLabel)}</span>` : ""}
+          </button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderFeedMediaSourceCard(entry) {
+  const item = getFeedMediaItem(entry.tripId, entry.folderId, entry.itemId);
+  const previewUrl = getFeedItemPreviewUrl(item);
+  const sourceLabel = entry.sourceLabel || buildItemSourceLabel(entry.tripId, entry.folderId);
+  const itemName = entry.itemName || (item ? getItemDisplayName(item) : "MEDIA");
+
+  return `
+    <div class="mt-3 flex min-w-0 overflow-hidden border border-white/10 bg-black/30">
+      ${previewUrl ? `<img src="${escapeHtml(previewUrl)}" alt="" class="h-20 w-24 shrink-0 object-cover">` : `<span class="flex h-20 w-24 shrink-0 items-center justify-center bg-white/[0.04] text-[0.58rem] uppercase tracking-[0.14em] text-stone-400/70">Media</span>`}
+      <div class="min-w-0 flex-1 px-3 py-2">
+        <p class="break-words text-sm uppercase tracking-[0.12em] text-stone-100 [overflow-wrap:anywhere]">${escapeHtml(itemName)}</p>
+        <p class="mt-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.14em] text-stone-400/72">${escapeHtml(sourceLabel)}</p>
+      </div>
+    </div>
+  `;
+}
+
+function buildReplyFeedContextLabel(rootEntry) {
+  if (!rootEntry) {
+    return "REPLIED IN THREAD";
+  }
+
+  if (rootEntry.type === "media-comment") {
+    return `REPLIED TO COMMENT // ${rootEntry.itemName || rootEntry.sourceLabel || "MEDIA"}`;
+  }
+
+  if (rootEntry.type === "wall-post") {
+    return `REPLIED ON ${normalizeSocialLabel(rootEntry.targetUserLabel || getFriendLabel(getFriendByUid(rootEntry.targetUserUid))).toUpperCase()}'S WALL`;
+  }
+
+  return "REPLIED IN THREAD";
+}
+
+function getRootActivityByThread(threadOwnerUid, activityId) {
+  return getUniqueFeedRootActivities().find(
+    (entry) => getThreadOwnerUid(entry) === threadOwnerUid && entry.id === activityId
+  ) || null;
+}
+
+function getFeedMediaItem(tripId, folderId, itemId) {
+  return getItemsForFolder(tripId, folderId).find((item) => item.id === itemId) ||
+    feedUploadItems.find(
+      (item) => item.tripId === tripId && item.folderId === folderId && item.id === itemId
+    ) ||
+    null;
+}
+
+function getFeedItemPreviewUrl(item) {
+  if (!item) {
+    return "";
+  }
+
+  return item.posterDownloadURL || item.downloadURL || "";
+}
+
+function isFeedMediaItemAuthoredByUser(tripId, folderId, itemId, uid) {
+  const item = getFeedMediaItem(tripId, folderId, itemId);
+  return Boolean(item && getItemAuthorUid(item) === uid);
+}
+
+function compareFeedEntriesByTime(left, right) {
+  return Number(right?.createdAtMs || 0) - Number(left?.createdAtMs || 0);
 }
 
 function renderTrips() {
@@ -9405,9 +10166,10 @@ function renderRouteChrome() {
   const profileView = getActiveProfileView();
   const isProfileMode = isProfileRoute();
   const isMembersMode = isMembersRoute();
+  const isFeedMode = isFeedRoute();
   const isLegalMode = isLegalRoute();
   const routeContextLabel = buildRouteContextLabel(profileView);
-  const pageKind = isProfileMode ? "profile" : isMembersMode ? "members" : isLegalMode ? "legal" : "archive";
+  const pageKind = isProfileMode ? "profile" : isMembersMode ? "members" : isFeedMode ? "feed" : isLegalMode ? "legal" : "archive";
 
   if (siteShell) {
     siteShell.dataset.page = pageKind;
@@ -9439,6 +10201,10 @@ function buildRouteContextLabel(profileView) {
 
   if (isMembersRoute()) {
     return "MEMBERS";
+  }
+
+  if (isFeedRoute()) {
+    return "ACTIVITY FEED";
   }
 
   if (!isProfileRoute()) {
@@ -9990,7 +10756,9 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
         highlightFolderSelected,
         pathLabel,
         contributeMarkup,
-        responsiveClass: "mobile-folder-open mt-3 min-w-0 overflow-hidden lg:hidden",
+        responsiveClass: isProfileView
+          ? "mobile-folder-open mt-3 min-w-0 lg:hidden"
+          : "mobile-folder-open mt-3 min-w-0 overflow-hidden lg:hidden",
       })
     : "";
   const desktopActiveFolderPanelMarkup = selectedFolder
@@ -10013,7 +10781,7 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
       });
 
   return `
-    <section class="${shellClass} min-w-0 overflow-hidden" data-trip-section="true">
+    <section class="${shellClass} min-w-0 ${isProfileView ? "overflow-visible" : "overflow-hidden"}" data-trip-section="true">
       <div class="${headerClass} group${headerInteractiveClass}"${headerToggleAttributes}>
         ${tripCoverMarkup}
         ${tripToggleIndicatorMarkup}
