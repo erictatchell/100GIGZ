@@ -6,7 +6,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "check": "node --check server.js && node --check static/app.js && node --check static/strings.js",
+    "smoke": "node --preserve-symlinks --input-type=module -e \"await import('./tests/smoke.test.mjs')\"",
+    "test": "npm run check && npm run smoke"
   },
   "dependencies": {
     "firebase": "^12.14.0",

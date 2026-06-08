@@ -40,7 +40,46 @@ import {
   uploadBytesResumable,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js";
 import { STRINGS, padCount } from "./strings.js";
+import {
+  buildStorageFileName,
+  buildUniqueStamp,
+  coerceTimestampToMs,
+  escapeCssSelectorToken,
+  escapeHtml,
+  formatBytes,
+  getFileExtension,
+  inferNameFromEmail,
+  isValidRouteId,
+  normalizeDisplayName,
+  normalizeMediaDisplayName,
+  normalizePersonName,
+  normalizeRouteId,
+  sanitizeFileBaseName,
+  sanitizeUpper,
+  simplifyMimeType,
+  slugifyFolder,
+  slugifyTrip,
+} from "./modules/core/utils.js";
 
+/**
+ * Root browser composition module.
+ *
+ * This file still owns app state, Firebase subscriptions, event delegation, and
+ * feature orchestration. New pure helpers should move into `static/modules/`;
+ * see `docs/frontend-architecture.md` for the extraction plan and smoke tests.
+ *
+ * How to read this file:
+ * - Constants, DOM references, and mutable state live first so handlers can share
+ *   the same browser-owned objects without import cycles.
+ * - Boot code wires copy, renders the initial shell, then starts the vault/auth
+ *   flow. Firebase subscriptions fan out after config and auth are ready.
+ * - Event handlers are grouped by surface: routing/mobile shell, contribution
+ *   dialogs, social activity, media preview, archive actions, and profile admin.
+ * - Render functions are grouped near the bottom because most handlers converge
+ *   on `renderAll()` or a smaller visible-surface refresh.
+ * - Pure normalizers/helpers should keep moving into `static/modules/` as this
+ *   file is split into feature modules.
+ */
 const DAY_FOLDERS = ["thu", "fri", "sat", "sun", "mon"];
 const DEFAULT_TRIPS = [
   {
@@ -61,6 +100,8 @@ const DEFAULT_TRIPS = [
   },
 ];
 
+// DOM cache. These IDs are owned by `index.html`; render and handler code below
+// mutates them directly instead of re-querying during every refresh.
 const siteShell = document.getElementById("site-shell");
 const vaultGate = document.getElementById("vault-gate");
 const appLoadingOverlay = document.getElementById("app-loading-overlay");
@@ -318,6 +359,8 @@ const featuredClipImage = document.getElementById("featured-clip-image");
 const featuredClipTitle = document.getElementById("featured-clip-title");
 const featuredClipContext = document.getElementById("featured-clip-context");
 const featuredClipDescription = document.getElementById("featured-clip-description");
+
+// Shared constants for roles, routes, limits, timers, and local storage keys.
 const DEFAULT_PROFILE_IMAGE_URL = "/static/default-profile.svg";
 const ROLE_FRIEND = "friend";
 const ROLE_ADMIN = "admin";
@@ -368,6 +411,8 @@ const FEATURED_MESSAGE_DOC_ID = "site-content";
 const DEFAULT_FEATURED_MESSAGE = STRINGS.auth.loading;
 const VAULT_LEGAL_DEFAULT_SECTION = "privacy";
 
+// Mutable browser state. Firestore listeners replace these collections, then
+// render functions read from them to keep the raw JS app predictable.
 let runtimeConfig = null;
 let firebaseApp = null;
 let auth = null;
@@ -474,6 +519,11 @@ let usersUnsubscribe = null;
 let siteSettingsUnsubscribe = null;
 const folderUnsubscribers = new Map();
 
+// -----------------------------------------------------------------------------
+// Boot And Runtime Setup
+// -----------------------------------------------------------------------------
+// Initial startup is intentionally linear: apply static copy, paint placeholders,
+// wire DOM events once, then let the vault/auth flow unlock Firebase-backed data.
 applyStaticStrings();
 renderFeaturedMessage();
 syncVaultLegalNav();
@@ -487,6 +537,8 @@ initializeVaultExperience().catch((error) => {
   setVaultStatusMessage(message.toUpperCase(), true);
 });
 
+// Writes localized/static labels into server-rendered controls. Called once
+// during boot before the user can interact with auth, upload, or admin forms.
 function applyStaticStrings() {
   if (authAccessLabel) {
     authAccessLabel.textContent = STRINGS.auth.access;
@@ -666,6 +718,9 @@ function applyStaticStrings() {
   }
 }
 
+// Owns the entry gate before the main archive becomes interactive. It decides
+// whether to show the password form, restore an unlocked session, or request
+// Google sign-in, then hands off to `initializeAppOnce()`.
 async function initializeVaultExperience() {
   applyVaultVideoSource(vaultState.videoPath);
   prepareVaultBackdrop();
@@ -719,6 +774,8 @@ async function initializeVaultExperience() {
   });
 }
 
+// Ensures Firebase/config/subscriptions are initialized a single time even when
+// vault unlock and auth restoration paths both race toward app startup.
 async function initializeAppOnce() {
   if (appInitializationPromise) {
     return appInitializationPromise;
@@ -732,6 +789,8 @@ async function initializeAppOnce() {
   return appInitializationPromise;
 }
 
+// Loads runtime config, starts Firebase/auth listeners, and attaches the main
+// Firestore streams that drive archive, member, profile, and feed rendering.
 async function initialize() {
   runtimeConfig = await loadRuntimeConfig();
   firestoreReady = await initializeFirebaseIfPossible(runtimeConfig.firebaseConfig);
@@ -764,6 +823,8 @@ async function initialize() {
   renderAll();
 }
 
+// Server config is fetched at runtime so the same static bundle can run across
+// local, preview, and hosted environments without rebuilding `static/app.js`.
 async function loadRuntimeConfig() {
   const response = await fetch("/api/config", {
     headers: { Accept: "application/json" },
@@ -1502,6 +1563,11 @@ function initializeTripBrowserEvents() {
   tripList?.addEventListener("change", handleTripBrowserChange);
 }
 
+// -----------------------------------------------------------------------------
+// Event Wiring
+// -----------------------------------------------------------------------------
+// One-time listener setup. Most dynamic UI uses delegated actions from this
+// block because large chunks of markup are regenerated by render functions.
 function setupForms() {
   vaultForm?.addEventListener("submit", handleVaultSubmit);
   vaultGoogleButton?.addEventListener("click", handleVaultGoogleSignIn);
@@ -1615,6 +1681,11 @@ function setupForms() {
   syncScrollBannerVisibility();
 }
 
+// -----------------------------------------------------------------------------
+// Navigation, Routing, And Responsive Shell
+// -----------------------------------------------------------------------------
+// These handlers keep desktop links, the mobile menu, browser history, modals,
+// and the scroll banner in sync with `currentRoute`.
 function handleAdminPanelsToggleChange(event) {
   setAdminPanelsVisible(Boolean(event.target?.checked));
 }
@@ -2189,6 +2260,11 @@ function setContributeMode(mode = "") {
   syncUploadQueueVisibility();
 }
 
+// -----------------------------------------------------------------------------
+// Contribution Dialogs And Text Preview
+// -----------------------------------------------------------------------------
+// Opens the add-to-folder modal, switches between upload/text modes, and previews
+// text posts. Submit handlers for the actual writes live in the media section.
 function beginContribution(tripId, folderId) {
   if (!canUploadMedia()) {
     authDetail.textContent = STRINGS.uploads.signInRequired;
@@ -2484,6 +2560,11 @@ function setAdminPanelsVisible(visible) {
   renderAll();
 }
 
+// -----------------------------------------------------------------------------
+// Authentication, Profile Setup, And Presence
+// -----------------------------------------------------------------------------
+// Google sign-in, member profile creation, role resolution, and online presence
+// updates live here because each flow depends on the current Firebase user.
 function createGoogleProvider() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
@@ -2884,6 +2965,12 @@ async function handleTripCoverUploadInputChange(input) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Social Posting, Threads, And Likes
+// -----------------------------------------------------------------------------
+// Creates media comments and wall posts, edits/deletes thread entries, and sends
+// all like buttons through one normalized context so counters and user liked
+// arrays stay in sync across media, comments, wall posts, and replies.
 async function handleVideoPreviewCommentSubmit(event) {
   event.preventDefault();
 
@@ -4009,6 +4096,11 @@ async function deleteSocialAttachmentIfPossible(storagePath) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Firestore Subscriptions And Activity Streams
+// -----------------------------------------------------------------------------
+// Live Firestore snapshots hydrate the in-memory state maps. The feed is built
+// from user activity docs, reply subcollections, upload items, and like docs.
 function subscribeToTrips() {
   const tripsQuery = query(
     collection(db, runtimeConfig.collections.trips),
@@ -4120,6 +4212,9 @@ function syncFeedActivitySubscriptions() {
     return;
   }
 
+  // All Activity watches every visible member's root activity collection. Your
+  // Activity later filters the combined stream down to entries relevant to the
+  // signed-in user.
   const desiredUids = new Set(
     getVisibleMembers()
       .map((friend) => String(friend.uid || friend.id || ""))
@@ -4185,6 +4280,8 @@ function syncFeedReplySubscriptions() {
     return;
   }
 
+  // Replies stay out of All Activity, but the feed still watches them for reply
+  // counters and Your Activity notifications.
   const desiredThreads = new Map();
 
   getUniqueFeedRootActivities()
@@ -4530,6 +4627,8 @@ function stopFeedStreams() {
   feedLikeEvents = [];
 }
 
+// These collection-group listeners keep counters and "liked by me" state fresh
+// across the archive, profile pages, preview modal, thread modal, and feed.
 function subscribeToMediaCommentAggregates() {
   mediaCommentAggregateUnsubscribe?.();
 
@@ -4822,6 +4921,8 @@ async function loadSelectedFolderItems(tripId) {
   }
 }
 
+// Mirrors Firebase Auth users into the app's `users` collection and returns the
+// normalized member profile that render/auth logic expects.
 async function syncUserRecord(user) {
   if (!db || !runtimeConfig?.collections?.users) {
     return null;
@@ -5343,6 +5444,11 @@ async function handleFolderSubmit(event) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Media Uploads, Authorship, And Item Editing
+// -----------------------------------------------------------------------------
+// Uploads write Storage objects plus Firestore item docs. The helpers below also
+// preserve author aliases and keep edit/move dialogs aligned with folder state.
 async function handleUploadSubmit(event) {
   event.preventDefault();
 
@@ -6252,6 +6358,11 @@ async function handleMoveItemSubmit(event) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Media Preview Player
+// -----------------------------------------------------------------------------
+// The preview modal owns video/image playback, route selection sync, autoplay,
+// viewed-recently tracking, and the comment/thread surface for the open item.
 function openVideoPreview(tripId, folderId, itemId, view = "archive", options = {}) {
   if (!videoPreviewPlayer || !tripId || !folderId || !itemId) {
     return;
@@ -6969,6 +7080,11 @@ function normalizeFeedLikeEvent(likeDoc) {
   return null;
 }
 
+// -----------------------------------------------------------------------------
+// Social Rendering And Action Contexts
+// -----------------------------------------------------------------------------
+// Shared renderers build comment, wall-post, reply, and feed cards. Context
+// builders/readers convert DOM data attributes back into Firestore paths.
 function renderVideoPreviewComments(previewState = getCurrentVideoPreviewState()) {
   const context = buildMediaCommentContext(previewState);
   const comments = context ? mediaCommentsByKey.get(context.key) || [] : [];
@@ -8729,6 +8845,9 @@ function getLikedArrayValueForContext(context) {
   return String(context?.targetKey || "");
 }
 
+// Public like entry point used by media, comments, wall posts, and replies. The
+// optional `desiredLiked` value prevents stale `likedMedia`/`likedComments`
+// arrays from flipping the wrong way when a user refreshes on old state.
 async function toggleLikeForContext(context, userUid, desiredLiked = null) {
   try {
     return await writeLikeStateTransaction(context, userUid, true, desiredLiked);
@@ -8741,6 +8860,10 @@ async function toggleLikeForContext(context, userUid, desiredLiked = null) {
   }
 }
 
+// Transactionally updates the like doc, the target counter, mirrored activity
+// docs, and the current user's liked arrays. If the UI asks to unlike a stale
+// array entry without a like doc, this removes the stale array value without
+// decrementing counters that were never incremented.
 async function writeLikeStateTransaction(context, userUid, includeCreatedAtMs = true, desiredLiked = null) {
   const likeRef = getLikeDocRefForContext(context, userUid);
   const targetRef = getLikeTargetDocRef(context);
@@ -9318,6 +9441,11 @@ function syncVideoPreviewCertification(previewState = getCurrentVideoPreviewStat
   }
 }
 
+// -----------------------------------------------------------------------------
+// Archive And Profile Action Handlers
+// -----------------------------------------------------------------------------
+// Ownership checks plus delegated click/change handlers for roles, previews,
+// certification, moving/deleting trips or items, and profile admin actions.
 function isCurrentUserItemOwner(item) {
   return Boolean(
     currentUser?.uid &&
@@ -10437,6 +10565,11 @@ async function handleFriendDisplayNameEditClick(trigger) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Top-Level Rendering
+// -----------------------------------------------------------------------------
+// `renderAll()` is the broad repaint used after auth, route, admin, and data
+// changes. Smaller render helpers below are safe to call for targeted refreshes.
 function renderAll() {
   recentMediaViews = pruneRecentMediaViews(recentMediaViews);
   syncResponsivePanels();
@@ -10685,6 +10818,9 @@ function handleFeedScopeChange(event) {
   renderFeedPage();
 }
 
+// Renders the single Activity Feed box. The radio selector only changes which
+// derived list is displayed: All Activity excludes replies, Your Activity
+// includes personally relevant comments, replies, wall posts, uploads, and likes.
 function renderFeedPage() {
   syncFeedScopeControls();
 
@@ -11210,6 +11346,11 @@ function compareFeedEntriesByTime(left, right) {
   return Number(right?.createdAtMs || 0) - Number(left?.createdAtMs || 0);
 }
 
+// -----------------------------------------------------------------------------
+// Archive And Profile Trip Rendering
+// -----------------------------------------------------------------------------
+// Current archive/profile folder UI is composed by `renderTripSections()` so the
+// main archive and member profile pages share the same mobile-safe structure.
 function renderTrips() {
   if (!tripList) {
     return;
@@ -11218,6 +11359,8 @@ function renderTrips() {
   tripList.innerHTML = renderTripSections({ view: "archive" });
   return;
 
+  // Legacy inline trip renderer kept unreachable for now while the shared
+  // `renderTripSections()` path settles. Remove during the next cleanup pass.
   const adminMode = isAdminViewEnabled();
 
   if (trips.length === 0) {
@@ -12285,6 +12428,8 @@ function getItemTypeLabel(item) {
     : item.extension || simplifyMimeType(item.mimeType) || "FILE";
 }
 
+// Desktop/table item renderer. The profile page uses the same row structure as
+// the main archive so horizontal overflow behavior stays consistent on mobile.
 function renderItemRows(items, tripId, folderId, view = "archive", options = {}) {
   const showSourceColumn = Boolean(options.showSourceColumn);
   const mostRecentViewedKey = getMostRecentVisibleMediaViewKey(items, tripId, folderId);
@@ -12382,6 +12527,8 @@ function renderMobileItemCards(items, tripId, folderId, view = "archive", option
   `;
 }
 
+// Mobile/card item renderer. File cards put the preview action on the outer
+// article so tapping anywhere on a media card opens the preview, not just title.
 function renderMobileItemCard(item, tripId, folderId, view = "archive", options = {}) {
   const displayName = getItemDisplayName(item);
   const certified = isItemCertified(item);
@@ -12984,6 +13131,11 @@ function renderItemAuthor(item, options = {}) {
   )}">${escapeHtml(authorLabel)}</a>`;
 }
 
+// -----------------------------------------------------------------------------
+// Folder Selection, Sorting, And Local UI Caches
+// -----------------------------------------------------------------------------
+// These helpers manage per-view folder selection, loaded item caches, upload job
+// status, item sorting, and the small style variants used by highlighted rows.
 function renderAdminSelects() {
   syncTripSelect(folderTripSelect, trips);
   syncTripSelect(uploadTripSelect, trips);
@@ -13721,6 +13873,11 @@ function updateUploadJob(jobId, updates) {
   renderUploadQueue();
 }
 
+// -----------------------------------------------------------------------------
+// Firestore Data Normalizers
+// -----------------------------------------------------------------------------
+// Snapshot data is normalized at the boundary so render code can assume stable
+// fields for trips, folders, media/text items, friends, and liked arrays.
 function normalizeTrip(trip, index) {
   const sortOrder = Number.isFinite(Number(trip?.sortOrder))
     ? Number(trip.sortOrder)
@@ -13829,35 +13986,15 @@ function normalizeFriend(user) {
   };
 }
 
-function normalizeDisplayName(value) {
-  return String(value || "")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function normalizePersonName(value) {
-  return String(value || "")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function normalizeRouteId(value) {
-  const routeId = String(value || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 3);
-
-  return /^[A-Z0-9]{3}$/.test(routeId) ? routeId : "";
-}
-
-function isValidRouteId(routeId) {
-  return /^[A-Z0-9]{3}$/.test(String(routeId || ""));
-}
-
 function normalizeAuthorAliasMode(value) {
   return value === AUTHOR_ALIAS_BRAND ? AUTHOR_ALIAS_BRAND : AUTHOR_ALIAS_SELF;
 }
 
+// -----------------------------------------------------------------------------
+// Member, Role, And Permission Helpers
+// -----------------------------------------------------------------------------
+// These helpers decide labels, profile routes, online status, admin visibility,
+// and upload permissions used by both renderers and event guards.
 function getFriendGoogleName(friend) {
   return normalizePersonName(friend?.googleName || inferNameFromEmail(friend?.email));
 }
@@ -14245,24 +14382,6 @@ function parseFolderSeeds(value) {
   return [...new Set(normalized)];
 }
 
-function normalizeMediaDisplayName(value, fallbackName = "") {
-  const nextValue = String(value || "")
-    .trim()
-    .replace(/\s+/g, " ");
-  const fallback = String(fallbackName || "").trim();
-  const extension = getFileExtension(fallback);
-
-  if (!nextValue) {
-    return fallback;
-  }
-
-  if (!extension || getFileExtension(nextValue)) {
-    return nextValue;
-  }
-
-  return `${nextValue}.${extension}`;
-}
-
 function buildDefaultUploadDisplayName(file, index, trip = null, existingMediaCount = 0) {
   const tripSlug = slugifyTrip(trip?.slug || trip?.id || "trip");
   const mediaPrefix = isVideoFile(file) ? "V" : "P";
@@ -14275,130 +14394,11 @@ function buildDefaultUploadDisplayName(file, index, trip = null, existingMediaCo
   return extension ? `${baseName}.${extension}` : baseName;
 }
 
-function buildStorageFileName(file, index, preferredName = "") {
-  const sourceName = normalizeMediaDisplayName(preferredName, file.name) || file.name;
-  const extension = getFileExtension(sourceName);
-  const safeBase = sanitizeFileBaseName(sourceName);
-  const timestamp = buildUniqueStamp(index);
-
-  return extension ? `${timestamp}-${safeBase}.${extension}` : `${timestamp}-${safeBase}`;
-}
-
-function buildUniqueStamp(index = 0) {
-  const randomSegment = Math.random().toString(36).slice(2, 8);
-  return `${Date.now()}${String(index).padStart(4, "0")}-${randomSegment}`;
-}
-
-function sanitizeFileBaseName(filename) {
-  const withoutExtension = String(filename || "").replace(/\.[^.]+$/, "");
-  const sanitized = withoutExtension
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return sanitized || "file";
-}
-
-function getFileExtension(filename) {
-  const match = String(filename || "").toLowerCase().match(/\.([a-z0-9]+)$/);
-  return match ? match[1] : "";
-}
-
-function simplifyMimeType(mimeType) {
-  if (!mimeType) {
-    return "";
-  }
-
-  const parts = String(mimeType).split("/");
-  return parts[1] || parts[0] || "";
-}
-
-function slugifyTrip(value) {
-  const input = String(value || "").trim().toLowerCase();
-  if (!input) {
-    return "";
-  }
-
-  return input
-    .replace(/montreal/g, "mtl")
-    .replace(/victoria/g, "vic")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function slugifyFolder(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function sanitizeUpper(value) {
-  return String(value || "")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toUpperCase();
-}
-
-function formatBytes(bytes) {
-  const size = Number(bytes || 0);
-
-  if (!size) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const exponent = Math.min(
-    Math.floor(Math.log(size) / Math.log(1024)),
-    units.length - 1
-  );
-  const value = size / 1024 ** exponent;
-  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
-}
-
-function coerceTimestampToMs(timestampValue, fallbackValue = 0) {
-  if (timestampValue && typeof timestampValue.toMillis === "function") {
-    return timestampValue.toMillis();
-  }
-
-  if (Number.isFinite(Number(timestampValue))) {
-    return Number(timestampValue);
-  }
-
-  if (Number.isFinite(Number(fallbackValue))) {
-    return Number(fallbackValue);
-  }
-
-  return 0;
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function inferNameFromEmail(email) {
-  const localPart = String(email || "")
-    .trim()
-    .split("@")[0]
-    .replace(/[^a-zA-Z0-9]+/g, " ")
-    .trim();
-
-  if (!localPart) {
-    return "";
-  }
-
-  return localPart
-    .split(/\s+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
-}
-
+// -----------------------------------------------------------------------------
+// Featured Clip, Recent Views, And Friendly Errors
+// -----------------------------------------------------------------------------
+// Final UI polish helpers: archive hero content, local viewed-media persistence,
+// logo motion, and user-facing Firebase/Auth/Storage error copy.
 function renderFeaturedMessage() {
   if (!loadingText) {
     return;
@@ -14577,14 +14577,6 @@ function pruneRecentMediaViews(value) {
   );
 
   return Object.fromEntries(nextEntries);
-}
-
-function escapeCssSelectorToken(value) {
-  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
-    return CSS.escape(String(value || ""));
-  }
-
-  return String(value || "").replace(/["\\]/g, "\\$&");
 }
 
 function startLogoGlitchLoop() {
