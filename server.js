@@ -37,6 +37,26 @@ export default async function handler(request, response) {
       return handleVaultVerify(request, response);
     }
 
+    if (pathname === "/api/vault/logout") {
+      if (request.method !== "POST") {
+        return sendText(response, 405, "Method Not Allowed", {
+          Allow: "POST",
+        });
+      }
+
+      return sendJson(
+        response,
+        200,
+        {
+          ok: true,
+          unlocked: false,
+        },
+        {
+          "Set-Cookie": buildExpiredVaultCookie(request),
+        }
+      );
+    }
+
     if (pathname === "/api/config") {
       if (!isVaultUnlocked(request)) {
         return sendJson(response, 403, {

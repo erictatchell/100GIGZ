@@ -1,9 +1,12 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import {
+  browserLocalPersistence,
+  browserSessionPersistence,
   GoogleAuthProvider,
   getRedirectResult,
   getAuth,
   onAuthStateChanged,
+  setPersistence,
   signInWithRedirect,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -67,7 +70,6 @@ const vaultForm = document.getElementById("vault-form");
 const vaultPasswordInput = document.getElementById("vault-password-input");
 const vaultSubmitButton = document.getElementById("vault-submit-button");
 const vaultStatusText = document.getElementById("vault-status");
-const vaultGoogleButton = document.getElementById("vault-google-signin-button");
 const vaultLegalModal = document.getElementById("vault-legal-modal");
 const vaultLegalBackdrop = document.getElementById("vault-legal-backdrop");
 const vaultLegalCloseButton = document.getElementById("vault-legal-close-button");
@@ -357,7 +359,6 @@ const PRESENCE_HEARTBEAT_INTERVAL_MS = 60 * 1000;
 const RECENT_MEDIA_VIEW_WINDOW_MS = 3 * 60 * 60 * 1000;
 const RECENT_MEDIA_VIEW_STORAGE_KEY = "100gigz-recent-media-views";
 const GOOGLE_REDIRECT_STORAGE_KEY = "100gigz-google-redirect-requested";
-const GOOGLE_AUTO_REDIRECT_STORAGE_KEY = "100gigz-google-auto-redirect-attempted";
 const ITEM_SORT_MEDIA_DATE_DESC = "media-date-desc";
 const ITEM_SORT_MEDIA_DATE_ASC = "media-date-asc";
 const ITEM_SORT_RECENTLY_ADDED = "recently-added";
@@ -490,10 +491,6 @@ function applyStaticStrings() {
 
   if (googleButton) {
     googleButton.textContent = STRINGS.auth.signInButton;
-  }
-
-  if (vaultGoogleButton) {
-    vaultGoogleButton.textContent = STRINGS.auth.signInButton;
   }
 
   if (signOutButton) {
@@ -674,7 +671,6 @@ async function initializeVaultExperience() {
     setAppLoadingOverlayVisible(false);
     lockSiteShell();
     showVaultGate();
-    setVaultGoogleButtonVisible(false);
     setVaultFormEnabled(false);
     setVaultFormVisible(true);
     setVaultStatusMessage(
@@ -693,7 +689,11 @@ async function initializeVaultExperience() {
     const [initResult] = await Promise.allSettled([initializeAppOnce()]);
     if (initResult.status === "rejected") {
       showWarning(getErrorMessage(initResult.reason, "Initialization failed."));
+      renderAll();
+      return;
     }
+
+    await settleExistingGoogleSession();
     renderAll();
     return;
   }
@@ -701,7 +701,6 @@ async function initializeVaultExperience() {
   setAppLoadingOverlayVisible(false);
   lockSiteShell();
   showVaultGate();
-  setVaultGoogleButtonVisible(false);
   setVaultFormEnabled(true);
   setVaultFormVisible(true);
   setVaultStatusMessage("");
@@ -723,7 +722,7 @@ async function initializeAppOnce() {
 
 async function initialize() {
   runtimeConfig = await loadRuntimeConfig();
-  firestoreReady = initializeFirebaseIfPossible(runtimeConfig.firebaseConfig);
+  firestoreReady = await initializeFirebaseIfPossible(runtimeConfig.firebaseConfig);
   storageReady = Boolean(
     runtimeConfig?.firebaseConfig?.storageBucket && firebaseApp
   );
@@ -909,24 +908,7 @@ function hasPendingGoogleRedirectResult() {
   );
 }
 
-function hasAttemptedGoogleAutoRedirect() {
-  return window.sessionStorage?.getItem(GOOGLE_AUTO_REDIRECT_STORAGE_KEY) === "1";
-}
-
-function setGoogleAutoRedirectAttempted(attempted) {
-  if (attempted) {
-    window.sessionStorage?.setItem(GOOGLE_AUTO_REDIRECT_STORAGE_KEY, "1");
-    return;
-  }
-
-  window.sessionStorage?.removeItem(GOOGLE_AUTO_REDIRECT_STORAGE_KEY);
-}
-
-function ensureAuthenticatedGoogleSession(options = {}) {
-  const message = String(
-    options.message || "SIGN IN WITH GOOGLE TO ENTER 100GIGZ."
-  ).trim();
-
+function ensureAuthenticatedGoogleSession() {
   if (!vaultState.unlocked) {
     lockSiteShell();
     return false;
@@ -944,36 +926,17 @@ function ensureAuthenticatedGoogleSession(options = {}) {
     return false;
   }
 
-  if (hasActiveGoogleSession()) {
-    setVaultGoogleButtonVisible(false);
-    if (!vaultGate?.classList.contains("hidden")) {
-      hideVaultGate();
-    }
-    revealSiteShell();
-    return true;
-  }
-
   if (hasPendingGoogleRedirectResult()) {
     lockSiteShell();
     beginRouteLoadingOverlay();
     return false;
   }
 
-  lockSiteShell();
-  setMobileMenuOpen(false);
-  beginRouteLoadingOverlay();
-
-  if (options.redirect !== false) {
-    if (hasAttemptedGoogleAutoRedirect()) {
-      showGoogleSessionGate(message);
-      return false;
-    }
-
-    setGoogleAutoRedirectAttempted(true);
-    void requestGoogleSignIn(message, { redirect: true });
+  if (!vaultGate?.classList.contains("hidden")) {
+    hideVaultGate();
   }
-
-  return false;
+  revealSiteShell();
+  return true;
 }
 
 function setAppLoadingOverlayVisible(visible) {
@@ -1156,23 +1119,6 @@ function setVaultFormVisible(visible) {
   vaultForm?.classList.toggle("pointer-events-none", !visible);
 }
 
-function setVaultGoogleButtonVisible(visible) {
-  setElementVisible(vaultGoogleButton, visible, "flex");
-}
-
-function showGoogleSessionGate(message = "SIGN IN WITH GOOGLE TO ENTER 100GIGZ.") {
-  lockSiteShell();
-  showVaultGate();
-  setAppLoadingOverlayVisible(false);
-  setVaultFormVisible(false);
-  setVaultFormEnabled(false);
-  setVaultGoogleButtonVisible(true);
-  setVaultStatusMessage(message.toUpperCase(), false);
-  window.requestAnimationFrame(() => {
-    vaultGoogleButton?.focus();
-  });
-}
-
 function setVaultStatusMessage(message, isError = false) {
   if (!vaultStatusText) {
     return;
@@ -1216,6 +1162,8 @@ async function handleVaultSubmit(event) {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
+      credentials: "same-origin",
+      cache: "no-store",
       body: JSON.stringify({ password }),
     });
     const payload = await readJsonResponse(response);
@@ -1229,15 +1177,17 @@ async function handleVaultSubmit(event) {
     vaultState = { ...vaultState, unlocked: true };
     setVaultStatusMessage("ACCESS GRANTED.");
     setVaultFormVisible(false);
-    setVaultGoogleButtonVisible(false);
 
-    const [initializeResult] = await Promise.allSettled([
-      initializeAppOnce(),
-      playVaultIntro(),
-    ]);
+    await playVaultIntro();
+
+    const [initializeResult] = await Promise.allSettled([initializeAppOnce()]);
 
     if (initializeResult.status === "rejected") {
       showWarning(getErrorMessage(initializeResult.reason, "Initialization failed."));
+      setVaultFormEnabled(true);
+      setVaultFormVisible(true);
+      setVaultStatusMessage("INITIALIZATION FAILED.", true);
+      return;
     }
 
     if (vaultPasswordInput) {
@@ -1245,6 +1195,8 @@ async function handleVaultSubmit(event) {
     }
 
     closeVaultLegalModal({ restoreFocus: false });
+
+    await settleExistingGoogleSession();
     hideVaultGate();
     renderAll();
   } catch (error) {
@@ -1348,15 +1300,25 @@ function getApiErrorMessage(payload, fallbackMessage) {
   return fallbackMessage;
 }
 
-function initializeFirebaseIfPossible(firebaseConfig) {
+async function initializeFirebaseIfPossible(firebaseConfig) {
   if (!hasFirebaseConfig(firebaseConfig)) {
     return false;
   }
 
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
+  await setFirebaseAuthPersistence(auth);
   db = getFirestore(firebaseApp);
   return true;
+}
+
+async function setFirebaseAuthPersistence(firebaseAuth) {
+  try {
+    await setPersistence(firebaseAuth, browserLocalPersistence);
+  } catch (error) {
+    console.warn("Could not use local Firebase Auth persistence.", error);
+    await setPersistence(firebaseAuth, browserSessionPersistence);
+  }
 }
 
 function subscribeToSiteSettings() {
@@ -1452,7 +1414,6 @@ function setupForms() {
   });
   vaultLegalCloseButton?.addEventListener("click", () => closeVaultLegalModal());
   vaultLegalBackdrop?.addEventListener("click", () => closeVaultLegalModal());
-  vaultGoogleButton?.addEventListener("click", handleGoogleSignIn);
   featuredMessageForm?.addEventListener("submit", handleFeaturedMessageSubmit);
   tripForm?.addEventListener("submit", handleTripSubmit);
   folderForm?.addEventListener("submit", handleFolderSubmit);
@@ -1560,10 +1521,6 @@ function handleAdminPanelsToggleChange(event) {
 }
 
 function handleMobileMenuToggleClick() {
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
-
   setMobileMenuOpen(!mobileMenuOpen);
 }
 
@@ -1576,42 +1533,22 @@ function navigateFromMobileMenu(route, options = {}) {
 }
 
 function handleMobileMenuArchiveClick() {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN ARCHIVE." })) {
-    return;
-  }
-
   navigateFromMobileMenu({ kind: ROUTE_ARCHIVE });
 }
 
 function handleMobileMenuProfileClick() {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN PROFILE." })) {
-    return;
-  }
-
   navigateFromMobileMenu(getOwnProfileRoute());
 }
 
 function handleMobileMenuActivityClick() {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN ACTIVITY FEED." })) {
-    return;
-  }
-
   navigateFromMobileMenu({ kind: ROUTE_FEED });
 }
 
 function handleMobileMenuMembersClick() {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN MEMBERS." })) {
-    return;
-  }
-
   navigateFromMobileMenu({ kind: ROUTE_MEMBERS });
 }
 
 function handleDesktopActivityClick() {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN ACTIVITY FEED." })) {
-    return;
-  }
-
   beginRouteLoadingOverlay();
   navigateToRoute({ kind: ROUTE_FEED });
 }
@@ -1622,15 +1559,10 @@ async function handleMobileMenuSignOutClick() {
 }
 
 function handleMobileMenuSignInClick() {
-  requestGoogleSignIn();
+  void handleGoogleSignIn();
 }
 
 function handleVideoPreviewCommentToggleClick() {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO COMMENT." })) {
-    setVideoPreviewCommentStatus("SIGN IN TO COMMENT.");
-    return;
-  }
-
   if (!currentUser?.uid || !canUploadMedia()) {
     requestGoogleSignIn("SIGN IN TO COMMENT.");
     setVideoPreviewCommentStatus("SIGN IN TO COMMENT.");
@@ -1915,10 +1847,6 @@ function getRouteToggleDestination(route = currentRoute) {
 }
 
 function handleRouteToggleClick() {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN PROFILE." })) {
-    return;
-  }
-
   beginRouteLoadingOverlay();
   navigateToRoute(getRouteToggleDestination());
 }
@@ -2367,10 +2295,6 @@ function handleDocumentRouteLinkClick(event) {
     return;
   }
 
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
-
   const nextRoute = normalizeRoute(targetUrl.pathname);
 
   if (nextRoute.kind === ROUTE_UNKNOWN) {
@@ -2473,6 +2397,20 @@ async function waitForFirebaseAuthState() {
   }
 }
 
+async function settleExistingGoogleSession() {
+  if (!auth) {
+    return false;
+  }
+
+  await waitForFirebaseAuthState();
+
+  if (auth.currentUser?.uid && currentUser?.uid !== auth.currentUser.uid) {
+    await activateAuthenticatedGoogleSession(auth.currentUser);
+  }
+
+  return hasActiveGoogleSession();
+}
+
 async function activateAuthenticatedGoogleSession(user) {
   const activeUser = user || auth?.currentUser;
 
@@ -2487,8 +2425,6 @@ async function activateAuthenticatedGoogleSession(user) {
   currentUser = activeUser;
   currentUserProfile = null;
   window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
-  setGoogleAutoRedirectAttempted(false);
-  setVaultGoogleButtonVisible(false);
   hideVaultGateImmediately();
   revealSiteShell();
 
@@ -2505,10 +2441,12 @@ async function activateAuthenticatedGoogleSession(user) {
 }
 
 async function settleGoogleRedirectResultIfNeeded() {
-  if (!auth || window.sessionStorage?.getItem(GOOGLE_REDIRECT_STORAGE_KEY) !== "1") {
-    return;
+  if (!auth) {
+    return false;
   }
 
+  const expectedRedirectResult =
+    window.sessionStorage?.getItem(GOOGLE_REDIRECT_STORAGE_KEY) === "1";
   googleRedirectResultPending = true;
   lockSiteShell();
   beginRouteLoadingOverlay();
@@ -2516,12 +2454,14 @@ async function settleGoogleRedirectResultIfNeeded() {
   try {
     const result = await getRedirectResult(auth);
     await waitForFirebaseAuthState();
+
     if (await activateAuthenticatedGoogleSession(result?.user || auth.currentUser)) {
       syncDefaultAdminMode();
       renderAll();
+      return true;
     }
   } catch (error) {
-    if (authDetail) {
+    if (expectedRedirectResult && authDetail) {
       authDetail.textContent = getFriendlyAuthMessage(error);
     }
   } finally {
@@ -2530,6 +2470,8 @@ async function settleGoogleRedirectResultIfNeeded() {
     googleSignInRequestInFlight = false;
     window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
   }
+
+  return false;
 }
 
 async function requestGoogleSignIn(message = STRINGS.auth.signingIn, options = {}) {
@@ -2579,31 +2521,47 @@ async function requestGoogleSignIn(message = STRINGS.auth.signingIn, options = {
 }
 
 async function handleGoogleSignIn() {
+  googleRedirectResultPending = false;
+  googleRedirectInProgress = false;
+  googleSignInRequestInFlight = false;
+  window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
   await requestGoogleSignIn();
+}
+
+async function clearVaultSessionCookie() {
+  await fetch("/api/vault/logout", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    credentials: "same-origin",
+    cache: "no-store",
+  });
 }
 
 async function handleSignOut() {
   try {
-    setGoogleAutoRedirectAttempted(true);
     if (auth) {
       await firebaseSignOut(auth);
     }
     authStateReady = true;
     currentUser = null;
     currentUserProfile = null;
-    showGoogleSessionGate("SIGN IN WITH GOOGLE TO ENTER 100GIGZ.");
   } catch (error) {
-    authDetail.textContent = getErrorMessage(error, STRINGS.errors.signOutFailed);
+    if (authDetail) {
+      authDetail.textContent = getErrorMessage(error, STRINGS.errors.signOutFailed);
+    }
+  } finally {
+    try {
+      await clearVaultSessionCookie();
+    } catch (error) {
+      console.warn("Could not clear vault session cookie.", error);
+    }
+
+    window.location.replace("/");
   }
 }
 
 async function handleProfileImageSubmit(event) {
   event.preventDefault();
-
-  if (!ensureAuthenticatedGoogleSession({ message: STRINGS.profile.signInRequired })) {
-    authDetail.textContent = STRINGS.profile.signInRequired;
-    return;
-  }
 
   if (!currentUser?.uid || !db || !storage || !storageReady) {
     authDetail.textContent = STRINGS.profile.signInRequired;
@@ -2801,11 +2759,6 @@ async function handleTripCoverUploadInputChange(input) {
 async function handleVideoPreviewCommentSubmit(event) {
   event.preventDefault();
 
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO COMMENT." })) {
-    setVideoPreviewCommentStatus("SIGN IN TO COMMENT.");
-    return;
-  }
-
   const previewState = getCurrentVideoPreviewState();
   const context = buildMediaCommentContext(previewState);
 
@@ -2901,11 +2854,6 @@ async function handleVideoPreviewCommentSubmit(event) {
 async function handleProfileActivitySubmit(event) {
   event.preventDefault();
 
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO POST." })) {
-    setProfileActivityStatus("SIGN IN TO POST.");
-    return;
-  }
-
   const profileView = getActiveProfileView();
   const targetFriend = profileView?.state === "ready" ? profileView.friend : null;
 
@@ -2978,11 +2926,6 @@ async function handleProfileActivitySubmit(event) {
 }
 
 async function handleMediaItemLikeButtonClick() {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO LIKE." })) {
-    setVideoPreviewCommentStatus("SIGN IN TO LIKE.");
-    return;
-  }
-
   const context = buildMediaItemLikeContext(getCurrentVideoPreviewState());
 
   if (!context?.targetKey || !db || !currentUser?.uid) {
@@ -3005,10 +2948,6 @@ async function handleMediaItemLikeButtonClick() {
 }
 
 function handleSocialCommentActionClick(event) {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN WITH GOOGLE TO CONTINUE." })) {
-    return;
-  }
-
   const threadTrigger = event.target.closest("[data-action='open-thread']");
 
   if (
@@ -3172,11 +3111,6 @@ function handleSocialCommentEditClick(trigger) {
 }
 
 async function handleSocialCommentEditSubmit(event) {
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN WITH GOOGLE TO CONTINUE." })) {
-    event.preventDefault();
-    return;
-  }
-
   const replyForm = event.target.closest("[data-action='save-thread-reply-edit']");
 
   if (replyForm) {
@@ -3579,11 +3513,6 @@ function getThreadReplyComposer(form) {
 
 async function handleThreadReplySubmit(event) {
   event.preventDefault();
-
-  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO COMMENT." })) {
-    setSocialSurfaceStatus("SIGN IN TO COMMENT.");
-    return;
-  }
 
   const form = event.target.closest("form");
   const composer = form ? getThreadReplyComposer(form) : null;
@@ -4875,11 +4804,6 @@ async function updatePresenceHeartbeat() {
 async function handleProfileDetailsSubmit(event) {
   event.preventDefault();
 
-  if (!ensureAuthenticatedGoogleSession({ message: STRINGS.profile.signInRequired })) {
-    authDetail.textContent = STRINGS.profile.signInRequired;
-    return;
-  }
-
   const profileView = getActiveProfileView();
   const targetFriend = profileView?.state === "ready" ? profileView.friend : null;
   const isEditingSelf = Boolean(targetFriend?.uid && targetFriend.uid === currentUser?.uid);
@@ -5110,10 +5034,6 @@ async function backfillVisibleProfiles(userDocs) {
 async function handleTripSubmit(event) {
   event.preventDefault();
 
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
-
   if (!db || !isAdminViewEnabled()) {
     return;
   }
@@ -5159,10 +5079,6 @@ async function handleTripSubmit(event) {
 
 async function handleFeaturedMessageSubmit(event) {
   event.preventDefault();
-
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
 
   if (!db || !isAdminViewEnabled()) {
     return;
@@ -5258,10 +5174,6 @@ async function handleFeaturedClipToggleClick(trigger) {
 async function handleFolderSubmit(event) {
   event.preventDefault();
 
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
-
   if (!db || !isAdminViewEnabled()) {
     return;
   }
@@ -5303,11 +5215,6 @@ async function handleFolderSubmit(event) {
 
 async function handleUploadSubmit(event) {
   event.preventDefault();
-
-  if (!ensureAuthenticatedGoogleSession({ message: STRINGS.uploads.signInRequired })) {
-    showWarning(STRINGS.uploads.signInRequired);
-    return;
-  }
 
   if (!canUploadMedia()) {
     requestGoogleSignIn(STRINGS.uploads.signInRequired);
@@ -5801,11 +5708,6 @@ function resolveItemAuthorLabel(item) {
 async function handleTextPostSubmit(event) {
   event.preventDefault();
 
-  if (!ensureAuthenticatedGoogleSession({ message: STRINGS.uploads.textSignInRequired })) {
-    showWarning(STRINGS.uploads.textSignInRequired);
-    return;
-  }
-
   if (!canUploadMedia()) {
     requestGoogleSignIn(STRINGS.uploads.textSignInRequired);
     showWarning(STRINGS.uploads.textSignInRequired);
@@ -5869,10 +5771,6 @@ async function handleTextPostSubmit(event) {
 
 async function handleEditTextPostSubmit(event) {
   event.preventDefault();
-
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
 
   if (!db || !currentItemEdit) {
     return;
@@ -6131,10 +6029,6 @@ function resetItemMoveDialog() {
 
 async function handleMoveItemSubmit(event) {
   event.preventDefault();
-
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
 
   if (!db || !currentItemMove || !moveItemFolderSelect) {
     return;
@@ -9351,10 +9245,6 @@ async function handleRoleSelectChange(event) {
 }
 
 function handleTripBrowserClick(event) {
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
-
   const textPreviewTrigger = event.target.closest("[data-action='preview-text']");
 
   if (textPreviewTrigger) {
@@ -9531,10 +9421,6 @@ function handleVideoPreviewClick(trigger) {
 }
 
 function handleTripBrowserChange(event) {
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
-
   const tripCoverInput = event.target.closest("[data-action='trip-cover-upload']");
 
   if (tripCoverInput) {
@@ -10199,10 +10085,6 @@ async function handleItemDeleteClick(trigger) {
 }
 
 function handleProfileActionClick(event) {
-  if (!ensureAuthenticatedGoogleSession()) {
-    return;
-  }
-
   const trigger = event.target.closest("[data-action='delete-profile']");
 
   if (trigger) {
@@ -10244,10 +10126,6 @@ function handleProfileCardKeydown(event) {
     event.metaKey ||
     (event.key !== "Enter" && event.key !== " ")
   ) {
-    return;
-  }
-
-  if (!ensureAuthenticatedGoogleSession()) {
     return;
   }
 
