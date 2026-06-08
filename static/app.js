@@ -22,12 +22,14 @@ import {
   getDoc,
   getDocs,
   getFirestore,
+  increment,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  updateDoc,
   writeBatch,
   where,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -130,6 +132,7 @@ const loadingText = document.getElementById("loading-text");
 const logo = document.getElementById("logo");
 const tripList = document.getElementById("trip-list");
 const tripCount = document.getElementById("trip-count");
+const clearCommentNotificationsButton = document.getElementById("clear-comment-notifications-button");
 const footerTickerTrack = document.getElementById("footer-ticker-track");
 const footerPrivacyLink = document.getElementById("footer-privacy-link");
 const footerTosLink = document.getElementById("footer-tos-link");
@@ -403,10 +406,13 @@ const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const PRESENCE_HEARTBEAT_INTERVAL_MS = 60 * 1000;
 const RECENT_MEDIA_VIEW_WINDOW_MS = 3 * 60 * 60 * 1000;
 const RECENT_MEDIA_VIEW_STORAGE_KEY = "100gigz-recent-media-views";
+const COMMENT_NOTIFICATION_STORAGE_KEY = "100gigz-cleared-media-comment-notifications";
 const GOOGLE_REDIRECT_STORAGE_KEY = "100gigz-google-redirect-requested";
 const ITEM_SORT_MEDIA_DATE_DESC = "media-date-desc";
 const ITEM_SORT_MEDIA_DATE_ASC = "media-date-asc";
 const ITEM_SORT_RECENTLY_ADDED = "recently-added";
+const ITEM_SORT_MOST_LIKES = "most-likes";
+const ITEM_SORT_MOST_COMMENTS = "most-comments";
 const FEATURED_MESSAGE_DOC_ID = "site-content";
 const DEFAULT_FEATURED_MESSAGE = STRINGS.auth.loading;
 const VAULT_LEGAL_DEFAULT_SECTION = "privacy";
@@ -483,11 +489,15 @@ let mediaCommentAggregateUnsubscribe = null;
 let threadReplyAggregateUnsubscribe = null;
 let likeAggregateUnsubscribe = null;
 let mediaCommentCountsByItemKey = new Map();
+let mediaCommentEntriesByItemKey = new Map();
 let mediaItemKeyByThreadKey = new Map();
 let mediaReplyCountsByItemKey = new Map();
 let replyCountsByThreadKey = new Map();
 let likeActorsByTargetKey = new Map();
 let interactionRefreshFrame = 0;
+let commentNotificationUserUid = "";
+let clearedMediaCommentNotificationKeys = new Set();
+let currentVideoPreviewNotificationCommentIds = new Set();
 let currentRoute = normalizeRoute(window.location.pathname);
 let featuredMessage = DEFAULT_FEATURED_MESSAGE;
 let featuredClip = null;
@@ -1519,6 +1529,7 @@ function initializeAuthListener() {
     googleRedirectInProgress = false;
     currentUser = user;
     currentUserProfile = null;
+    syncCommentNotificationUserState(user?.uid || "");
 
     if (user) {
       await activateAuthenticatedGoogleSession(user);
@@ -1582,6 +1593,7 @@ function setupForms() {
   featuredMessageForm?.addEventListener("submit", handleFeaturedMessageSubmit);
   tripForm?.addEventListener("submit", handleTripSubmit);
   folderForm?.addEventListener("submit", handleFolderSubmit);
+  clearCommentNotificationsButton?.addEventListener("click", handleClearCommentNotificationsClick);
   uploadForm?.addEventListener("submit", handleUploadSubmit);
   textPostForm?.addEventListener("submit", handleTextPostSubmit);
   editPostForm?.addEventListener("submit", handleEditTextPostSubmit);
@@ -1721,6 +1733,21 @@ function handleMobileMenuMembersClick() {
 function handleDesktopActivityClick() {
   beginRouteLoadingOverlay();
   navigateToRoute({ kind: ROUTE_FEED });
+}
+
+function handleClearCommentNotificationsClick() {
+  const notifications = getNewMediaCommentNotifications();
+
+  if (notifications.length === 0) {
+    syncCommentNotificationControls();
+    return;
+  }
+
+  clearMediaCommentNotifications(notifications);
+
+  if (authDetail) {
+    authDetail.textContent = "COMMENT NOTIFICATIONS CLEARED.";
+  }
 }
 
 async function handleMobileMenuSignOutClick() {
@@ -2605,6 +2632,7 @@ async function activateAuthenticatedGoogleSession(user) {
   googleSignInRequestInFlight = false;
   currentUser = activeUser;
   currentUserProfile = null;
+  syncCommentNotificationUserState(activeUser.uid);
   window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
   hideVaultGateImmediately();
   revealSiteShell();
@@ -3057,6 +3085,7 @@ async function handleVideoPreviewCommentSubmit(event) {
     });
 
     await batch.commit();
+    syncStoredMediaItemCommentCount(context, 1);
     videoPreviewCommentForm?.reset();
     setVideoPreviewCommentStatus("COMMENT POSTED.");
   } catch (error) {
@@ -3931,6 +3960,7 @@ async function deleteSocialComment(context) {
   });
 
   await batch.commit();
+  syncStoredMediaItemCommentCount(context, -1);
 
   try {
     await deleteSocialAttachmentIfPossible(context.attachmentStoragePath);
@@ -3998,6 +4028,34 @@ async function deleteWallPost(context) {
   }
 
   resetActiveThreadForContext(threadContext);
+}
+
+function syncStoredMediaItemCommentCount(context, delta) {
+  void updateStoredMediaItemCommentCount(context, delta).catch((error) => {
+    console.warn("Could not update media item comment count.", error);
+  });
+}
+
+async function updateStoredMediaItemCommentCount(context, delta) {
+  if (!db || !context?.tripId || !context?.folderId || !context?.itemId || !delta) {
+    return;
+  }
+
+  const itemRef = getMediaItemDocRef(context);
+
+  if (delta > 0) {
+    await updateDoc(itemRef, { commentCount: increment(delta) });
+    return;
+  }
+
+  const itemSnapshot = await getDoc(itemRef);
+
+  if (!itemSnapshot.exists()) {
+    return;
+  }
+
+  const currentCommentCount = Math.max(Number(itemSnapshot.data()?.commentCount || 0), 0);
+  await updateDoc(itemRef, { commentCount: Math.max(currentCommentCount + delta, 0) });
 }
 
 async function deleteThreadReply(context) {
@@ -4254,6 +4312,7 @@ function syncFeedActivitySubscriptions() {
         );
         rebuildFeedRootActivitiesFromUserStreams();
         syncFeedReplySubscriptions();
+        scheduleInteractionRefresh();
         renderFeedPageIfVisible();
       },
       (error) => {
@@ -4636,6 +4695,7 @@ function subscribeToMediaCommentAggregates() {
     collectionGroup(db, "comments"),
     (snapshot) => {
       const nextCommentCountsByItemKey = new Map();
+      const nextCommentEntriesByItemKey = new Map();
       const nextMediaItemKeyByThreadKey = new Map();
 
       snapshot.docs.forEach((commentDoc) => {
@@ -4648,6 +4708,12 @@ function subscribeToMediaCommentAggregates() {
             itemKey,
             Number(nextCommentCountsByItemKey.get(itemKey) || 0) + 1
           );
+
+          if (!nextCommentEntriesByItemKey.has(itemKey)) {
+            nextCommentEntriesByItemKey.set(itemKey, []);
+          }
+
+          nextCommentEntriesByItemKey.get(itemKey).push(comment);
         }
 
         if (itemKey && threadKey) {
@@ -4656,6 +4722,7 @@ function subscribeToMediaCommentAggregates() {
       });
 
       mediaCommentCountsByItemKey = nextCommentCountsByItemKey;
+      mediaCommentEntriesByItemKey = nextCommentEntriesByItemKey;
       mediaItemKeyByThreadKey = nextMediaItemKeyByThreadKey;
       rebuildMediaReplyCountsByItemKey();
       scheduleInteractionRefresh();
@@ -4664,6 +4731,45 @@ function subscribeToMediaCommentAggregates() {
       console.warn("Could not subscribe to media comment aggregates.", error);
     }
   );
+}
+
+function syncMediaCommentAggregateCacheForItem(context, comments = []) {
+  const itemKey = buildMediaItemKey(context?.tripId, context?.folderId, context?.itemId);
+
+  if (!itemKey) {
+    return;
+  }
+
+  const nextCommentCountsByItemKey = new Map(mediaCommentCountsByItemKey);
+  const nextCommentEntriesByItemKey = new Map(mediaCommentEntriesByItemKey);
+  const nextMediaItemKeyByThreadKey = new Map(mediaItemKeyByThreadKey);
+
+  nextMediaItemKeyByThreadKey.forEach((mappedItemKey, threadKey) => {
+    if (mappedItemKey === itemKey) {
+      nextMediaItemKeyByThreadKey.delete(threadKey);
+    }
+  });
+
+  if (comments.length > 0) {
+    nextCommentCountsByItemKey.set(itemKey, comments.length);
+    nextCommentEntriesByItemKey.set(itemKey, comments);
+  } else {
+    nextCommentCountsByItemKey.delete(itemKey);
+    nextCommentEntriesByItemKey.delete(itemKey);
+  }
+
+  comments.forEach((comment) => {
+    const threadKey = buildThreadKey(getThreadOwnerUid(comment), comment.id);
+
+    if (threadKey) {
+      nextMediaItemKeyByThreadKey.set(threadKey, itemKey);
+    }
+  });
+
+  mediaCommentCountsByItemKey = nextCommentCountsByItemKey;
+  mediaCommentEntriesByItemKey = nextCommentEntriesByItemKey;
+  mediaItemKeyByThreadKey = nextMediaItemKeyByThreadKey;
+  rebuildMediaReplyCountsByItemKey();
 }
 
 function subscribeToThreadReplyAggregates() {
@@ -6387,6 +6493,16 @@ function openVideoPreview(tripId, folderId, itemId, view = "archive", options = 
     return;
   }
 
+  const newCommentNotifications = getNewMediaCommentNotificationsForItem(
+    previewState.currentItem,
+    previewState.tripId,
+    previewState.folderId
+  );
+  currentVideoPreviewNotificationCommentIds = new Set(
+    newCommentNotifications.map((comment) => comment.id).filter(Boolean)
+  );
+  clearMediaCommentNotifications(newCommentNotifications, { render: false });
+
   videoPreviewCommentComposerOpen = false;
   markPreviewItemViewed(previewState);
   if (!currentVideoPreviewContext.preservePageContext) {
@@ -6396,6 +6512,10 @@ function openVideoPreview(tripId, folderId, itemId, view = "archive", options = 
   syncVideoPreviewMedia(previewState);
   syncVideoPreviewComments(previewState);
   setVideoPreviewModalOpen(true);
+  syncCommentNotificationControls();
+  if (newCommentNotifications.length > 0) {
+    scheduleInteractionRefresh();
+  }
   if (!currentVideoPreviewContext.preservePageContext) {
     schedulePreviewRowAlignment(previewState);
   }
@@ -6445,6 +6565,7 @@ function resetVideoPreview() {
   setVideoPreviewAutoplayEnabled(false);
   resetVideoPreviewThreadSelection();
   videoPreviewCommentComposerOpen = false;
+  currentVideoPreviewNotificationCommentIds = new Set();
   currentVideoPreviewContext = null;
   syncVideoPreviewNavigation(null);
   syncVideoPreviewMedia(null);
@@ -6923,12 +7044,12 @@ function syncMediaCommentsSubscription(previewState = getCurrentVideoPreviewStat
   mediaCommentsUnsubscribe = onSnapshot(
     commentsQuery,
     (snapshot) => {
-      mediaCommentsByKey.set(
-        nextKey,
-        snapshot.docs.map((commentDoc) =>
-          normalizeMediaComment({ id: commentDoc.id, ...commentDoc.data() })
-        )
+      const comments = snapshot.docs.map((commentDoc) =>
+        normalizeMediaComment({ id: commentDoc.id, ...commentDoc.data() })
       );
+      mediaCommentsByKey.set(nextKey, comments);
+      syncMediaCommentAggregateCacheForItem(context, comments);
+      scheduleInteractionRefresh();
       renderVideoPreviewComments(getCurrentVideoPreviewState());
     },
     (error) => {
@@ -6979,6 +7100,215 @@ function buildMediaItemKey(tripId, folderId, itemId) {
 function buildMediaItemKeyFromItem(item, tripId, folderId) {
   const sourceFolderId = resolveItemSourceFolderId(item, folderId);
   return buildMediaItemKey(tripId, sourceFolderId, item?.id);
+}
+
+function buildMediaCommentNotificationKey(comment) {
+  return buildMediaCommentLikeKey(
+    comment?.tripId,
+    comment?.folderId,
+    comment?.itemId,
+    comment?.id
+  );
+}
+
+function getCommentNotificationStorageKey(uid = currentUser?.uid) {
+  return `${COMMENT_NOTIFICATION_STORAGE_KEY}:${String(uid || "anonymous")}`;
+}
+
+function syncCommentNotificationUserState(uid = currentUser?.uid || "") {
+  const nextUid = String(uid || "");
+
+  if (commentNotificationUserUid === nextUid) {
+    return;
+  }
+
+  commentNotificationUserUid = nextUid;
+  clearedMediaCommentNotificationKeys = nextUid
+    ? loadClearedMediaCommentNotificationKeys(nextUid)
+    : new Set();
+  currentVideoPreviewNotificationCommentIds = new Set();
+}
+
+function loadClearedMediaCommentNotificationKeys(uid = currentUser?.uid) {
+  if (!uid) {
+    return new Set();
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(getCommentNotificationStorageKey(uid));
+    const parsed = rawValue ? JSON.parse(rawValue) : [];
+
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistClearedMediaCommentNotificationKeys() {
+  if (!commentNotificationUserUid) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      getCommentNotificationStorageKey(commentNotificationUserUid),
+      JSON.stringify([...clearedMediaCommentNotificationKeys])
+    );
+  } catch {
+    // Ignore storage persistence errors.
+  }
+}
+
+function getNewMediaCommentNotifications() {
+  const notifications = [];
+  const seenNotificationKeys = new Set();
+
+  itemsByFolder.forEach((items, cacheKey) => {
+    const [, tripId, folderId] = String(cacheKey || "").split(":");
+
+    if (!tripId || !folderId || isHighlightFolder(folderId)) {
+      return;
+    }
+
+    (items || []).forEach((item) => {
+      getNewMediaCommentNotificationsForItem(item, tripId, folderId).forEach((comment) => {
+        const notificationKey = buildMediaCommentNotificationKey(comment);
+
+        if (!notificationKey || seenNotificationKeys.has(notificationKey)) {
+          return;
+        }
+
+        seenNotificationKeys.add(notificationKey);
+        notifications.push(comment);
+      });
+    });
+  });
+
+  return notifications.sort(compareFeedEntriesByTime);
+}
+
+function getNewMediaCommentNotificationsForTrip(tripId) {
+  return getFoldersForTrip(tripId)
+    .filter((folder) => !isHighlightFolder(folder))
+    .flatMap((folder) => getNewMediaCommentNotificationsForFolder(tripId, folder.id));
+}
+
+function getNewMediaCommentNotificationsForFolder(tripId, folderId) {
+  if (!tripId || !folderId || isHighlightFolder(folderId)) {
+    return [];
+  }
+
+  return getItemsForFolder(tripId, folderId)
+    .flatMap((item) => getNewMediaCommentNotificationsForItem(item, tripId, folderId));
+}
+
+function getNewMediaCommentNotificationsForItem(item, tripId, folderId) {
+  const uid = String(currentUser?.uid || "");
+
+  if (!uid || item?.kind !== "file") {
+    return [];
+  }
+
+  const authorUid = getItemAuthorUid(item);
+
+  if (!authorUid || authorUid !== uid) {
+    return [];
+  }
+
+  const itemKey = buildMediaItemKeyFromItem(item, tripId, folderId);
+
+  if (!itemKey) {
+    return [];
+  }
+
+  return (mediaCommentEntriesByItemKey.get(itemKey) || []).filter((comment) =>
+    isNewMediaCommentNotification(comment, uid)
+  );
+}
+
+function isNewMediaCommentNotification(comment, uid = currentUser?.uid) {
+  const notificationKey = buildMediaCommentNotificationKey(comment);
+  const authorUid = String(comment?.authorUid || "");
+
+  return Boolean(
+    notificationKey &&
+      !clearedMediaCommentNotificationKeys.has(notificationKey) &&
+      (!authorUid || authorUid !== String(uid || ""))
+  );
+}
+
+function clearMediaCommentNotifications(comments = [], options = {}) {
+  const notificationKeys = comments
+    .map((comment) => buildMediaCommentNotificationKey(comment))
+    .filter(Boolean);
+
+  if (notificationKeys.length === 0) {
+    return;
+  }
+
+  notificationKeys.forEach((key) => {
+    clearedMediaCommentNotificationKeys.add(key);
+  });
+  persistClearedMediaCommentNotificationKeys();
+
+  if (options.render === false) {
+    syncCommentNotificationControls();
+    return;
+  }
+
+  renderVisibleRouteContent();
+  syncCommentNotificationControls();
+
+  if (videoPreviewModalOpen) {
+    renderVideoPreviewComments(getCurrentVideoPreviewState());
+  }
+}
+
+function getNewMediaCommentNotificationCount() {
+  return getNewMediaCommentNotifications().length;
+}
+
+function renderNewCommentNotificationBadge(count, options = {}) {
+  const total = Number(count || 0);
+
+  if (total <= 0) {
+    return "";
+  }
+
+  const label = options.countOnly
+    ? String(total)
+    : `${total} NEW ${total === 1 ? "COMMENT" : "COMMENTS"}`;
+  const extraClass = options.className ? ` ${options.className}` : "";
+
+  return `<span class="inline-flex shrink-0 items-center border border-red-200/55 bg-red-500/18 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.5rem] uppercase leading-none tracking-[0.12em] text-red-50 shadow-[0_0_16px_rgba(239,68,68,0.16)]${extraClass}">${escapeHtml(label)}</span>`;
+}
+
+function syncCommentNotificationControls() {
+  const count = getNewMediaCommentNotificationCount();
+
+  syncActivityNotificationButtons(count);
+
+  if (clearCommentNotificationsButton) {
+    clearCommentNotificationsButton.classList.toggle("hidden", count <= 0);
+    clearCommentNotificationsButton.disabled = count <= 0;
+    clearCommentNotificationsButton.textContent = count > 0
+      ? `Clear All ${count}`
+      : "Clear All";
+  }
+}
+
+function syncActivityNotificationButtons(count = getNewMediaCommentNotificationCount()) {
+  const badgeMarkup = renderNewCommentNotificationBadge(count, {
+    countOnly: true,
+    className: "ml-2 min-w-5 justify-center px-1.5 py-1 text-[0.54rem]",
+  });
+  const content = `<span class="inline-flex w-full items-center justify-center gap-2"><span>Activity Feed</span>${badgeMarkup}</span>`;
+
+  [bannerActivityButton, desktopActivityButton, mobileMenuActivityButton].forEach((button) => {
+    if (button) {
+      button.innerHTML = content;
+    }
+  });
 }
 
 function buildMediaCommentLikeKey(tripId, folderId, itemId, commentId) {
@@ -7289,6 +7619,8 @@ function renderSocialEntryCard(entry, options = {}) {
 function renderMediaComment(comment, options = {}) {
   const context = buildThreadActionContext(comment);
   const interactionMarkup = renderSocialInteractionBar(comment, { includeReplyCount: false });
+  const highlighted = isHighlightedPreviewComment(comment);
+  const highlightAttrs = highlighted ? ' data-new-comment="true"' : "";
   const replyButtonMarkup = context.threadOwnerUid && context.activityId
     ? `
       <div class="mt-3">
@@ -7304,12 +7636,22 @@ function renderMediaComment(comment, options = {}) {
     `
     : "";
   return renderSocialEntryCard(comment, {
-    articleAttrs: `data-media-comment-id="${escapeHtml(comment.id)}"`,
+    articleAttrs: `data-media-comment-id="${escapeHtml(comment.id)}"${highlightAttrs}`,
+    cardClass: highlighted ? "ring-1 ring-red-300/55 bg-red-500/[0.08]" : "",
+    headerMetaMarkup: highlighted ? renderNewCommentNotificationBadge(1) : "",
     controlsMarkup: renderSocialEntryTypeControls(comment),
     bodyMarkup: renderEditableSocialEntryContent(comment),
     interactionMarkup,
     footerMarkup: replyButtonMarkup,
   });
+}
+
+function isHighlightedPreviewComment(entry) {
+  return Boolean(
+    entry?.type === "media-comment" &&
+      entry?.id &&
+      currentVideoPreviewNotificationCommentIds.has(entry.id)
+  );
 }
 
 function syncProfileActivitySubscription(userId) {
@@ -7736,8 +8078,12 @@ function renderThreadRootEntry(entry, options = {}) {
   const showActionLabel = options.showActionLabel !== false;
   const actionLabel = showActionLabel ? buildThreadRootActionLabel(entry) : "";
   const interactionMarkup = renderSocialInteractionBar(entry, { includeReplyCount: false });
+  const highlighted = isHighlightedPreviewComment(entry);
+  const highlightAttrs = highlighted ? ' data-new-comment="true"' : "";
   return renderSocialEntryCard(entry, {
-    articleAttrs: `data-thread-root-entry="${escapeHtml(entry.id)}"`,
+    articleAttrs: `data-thread-root-entry="${escapeHtml(entry.id)}"${highlightAttrs}`,
+    cardClass: highlighted ? "ring-1 ring-red-300/55 bg-red-500/[0.08]" : "",
+    headerMetaMarkup: highlighted ? renderNewCommentNotificationBadge(1) : "",
     controlsMarkup: renderSocialEntryTypeControls(entry),
     actionLabel,
     bodyMarkup: renderEditableSocialEntryContent(entry),
@@ -8290,9 +8636,60 @@ function getMediaItemInteractionCounts(item, tripId, folderId) {
   return {
     itemKey,
     likeCount: getLikeCountForTargetKey(itemKey, item?.likeCount),
-    commentCount: Number(mediaCommentCountsByItemKey.get(itemKey) || 0),
+    commentCount: getCommentCountForMediaItem(item, itemKey),
     replyCount: Number(mediaReplyCountsByItemKey.get(itemKey) || 0),
   };
+}
+
+function getCommentCountForMediaItem(item, itemKey) {
+  return Math.max(
+    Number(item?.commentCount || 0),
+    getObservedMediaCommentCountForItemKey(itemKey)
+  );
+}
+
+function getObservedMediaCommentCountForItemKey(itemKey) {
+  if (!itemKey) {
+    return 0;
+  }
+
+  return Math.max(
+    Number(mediaCommentCountsByItemKey.get(itemKey) || 0),
+    getActivityMediaCommentCountForItemKey(itemKey)
+  );
+}
+
+function getActivityMediaCommentCountForItemKey(itemKey) {
+  if (!itemKey) {
+    return 0;
+  }
+
+  const commentKeys = new Set();
+
+  feedRootActivities.forEach((entry) => {
+    if (entry?.type !== "media-comment") {
+      return;
+    }
+
+    const entryItemKey = buildMediaItemKey(entry.tripId, entry.folderId, entry.itemId);
+
+    if (entryItemKey !== itemKey) {
+      return;
+    }
+
+    const commentKey = buildMediaCommentLikeKey(
+      entry.tripId,
+      entry.folderId,
+      entry.itemId,
+      entry.id
+    );
+
+    if (commentKey) {
+      commentKeys.add(commentKey);
+    }
+  });
+
+  return commentKeys.size;
 }
 
 function getVideoPreviewThreadContext(previewState = getCurrentVideoPreviewState()) {
@@ -8648,6 +9045,7 @@ function scheduleInteractionRefresh() {
   interactionRefreshFrame = window.requestAnimationFrame(() => {
     interactionRefreshFrame = 0;
     renderVisibleRouteContent();
+    syncCommentNotificationControls();
 
     if (videoPreviewModalOpen) {
       renderVideoPreviewComments(getCurrentVideoPreviewState());
@@ -8670,6 +9068,18 @@ function getMediaCommentDocRef(context) {
     context.itemId,
     "comments",
     context.commentId
+  );
+}
+
+function getMediaItemDocRef(context) {
+  return doc(
+    db,
+    runtimeConfig.collections.trips,
+    context.tripId,
+    "folders",
+    context.folderId,
+    "items",
+    context.itemId
   );
 }
 
@@ -10575,6 +10985,7 @@ function renderAll() {
   syncResponsivePanels();
 
   if (!ensureAuthenticatedGoogleSession()) {
+    syncCommentNotificationControls();
     syncScrollBannerVisibility();
     return;
   }
@@ -10585,6 +10996,7 @@ function renderAll() {
   renderRouteChrome();
   renderCurrentPage();
   renderTripCount();
+  syncCommentNotificationControls();
   renderFooterTicker();
   renderFooterRouteLinks();
   renderVisibleRouteContent();
@@ -12109,6 +12521,9 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
   const tripToggleIndicatorMarkup = isProfileView ? "" : renderTripToggleIndicator(expanded);
   const tripCoverMarkup = renderTripCoverMarkup(trip, expanded);
   const tripStatusTagMarkup = renderTripStatusTag(trip);
+  const tripNotificationMarkup = !isProfileView
+    ? renderNewCommentNotificationBadge(getNewMediaCommentNotificationsForTrip(trip.id).length)
+    : "";
   const tripSettingsMarkup = !isProfileView && adminMode ? renderTripSettingsMenu(trip) : "";
   const shellClass = isProfileView
     ? "border border-white/12 bg-[linear-gradient(to_bottom,rgba(38,38,38,0.18),rgba(255,255,255,0.02)_40%,rgba(0,0,0,0.1))]"
@@ -12189,6 +12604,7 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="break-words text-2xl uppercase tracking-[0.18em] text-stone-100 [overflow-wrap:anywhere] sm:whitespace-nowrap sm:text-3xl">${escapeHtml(`${trip.slug}/`)}</h2>
             ${tripStatusTagMarkup}
+            ${tripNotificationMarkup}
           </div>
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-xs uppercase tracking-[0.18em] ${isProfileView ? "text-stone-300/60" : "text-stone-300/60"}">${escapeHtml(trip.label)}</p>
         </div>
@@ -12256,6 +12672,12 @@ function renderTripFolderButtons(trip, folders, selectedFolderId, view = "archiv
       const folderItems = view === "profile"
         ? getProfileItemsForFolder(profileFriend, trip.id, folder.id)
         : getItemsForFolder(trip.id, folder.id);
+      const notificationMarkup = view === "profile"
+        ? ""
+        : renderNewCommentNotificationBadge(
+            getNewMediaCommentNotificationsForFolder(trip.id, folder.id).length,
+            { className: "whitespace-nowrap" }
+          );
       const buttonStyle = highlightFolder
         ? getHighlightFolderButtonStyle(isSelected)
         : isSelected
@@ -12269,7 +12691,7 @@ function renderTripFolderButtons(trip, folders, selectedFolderId, view = "archiv
       const labelStyleAttribute = highlightTextStyle ? ` style="${highlightTextStyle}"` : "";
       const countStyleAttribute = highlightTextStyle ? ` style="${highlightTextStyle}"` : "";
       const labelMarkup = `<span class="hidden lg:inline${labelToneClass}"${labelStyleAttribute}>${escapeHtml(shortLabel)}</span><span class="lg:hidden${labelToneClass}"${labelStyleAttribute}>${escapeHtml(fullLabel)}</span>`;
-      const countMarkup = `<span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] tracking-[0.16em] ${countToneClass}"${countStyleAttribute}>${escapeHtml(String(folderItems.length))}</span>`;
+      const countMarkup = `<span class="flex shrink-0 items-center gap-1.5"><span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] tracking-[0.16em] ${countToneClass}"${countStyleAttribute}>${escapeHtml(String(folderItems.length))}</span>${notificationMarkup}</span>`;
 
       return `
         <button
@@ -12308,7 +12730,7 @@ function getProfileItemsForFolder(friend, tripId, folderId, sortMode = ITEM_SORT
     isItemAuthoredByUser(item, friend)
   );
 
-  return [...items].sort((left, right) => compareItems(left, right, sortMode));
+  return [...items].sort((left, right) => compareItems(left, right, sortMode, tripId, folderId));
 }
 
 function countAuthoredItemsForUser(friend) {
@@ -12460,6 +12882,10 @@ function renderItemRows(items, tripId, folderId, view = "archive", options = {})
       const source = renderItemSource(tripId, sourceFolderId, { muted: viewedRecently });
       const author = renderItemAuthor(item, { muted: viewedRecently });
       const certified = renderItemCertified(item, { muted: viewedRecently });
+      const notificationMarkup = renderNewCommentNotificationBadge(
+        getNewMediaCommentNotificationsForItem(item, tripId, sourceFolderId).length,
+        { className: "mt-1.5" }
+      );
       const meta = renderItemMeta(item, tripId, sourceFolderId, {
         mostRecentViewedKey,
         muted: viewedRecently,
@@ -12488,7 +12914,7 @@ function renderItemRows(items, tripId, folderId, view = "archive", options = {})
         >
           <td class="align-middle min-w-[4rem] ${cellBorderClass} px-2 py-2 sm:min-w-[4.5rem] sm:px-2.5 sm:py-2.5">${preview}</td>
           ${showSourceColumn ? `<td class="align-middle min-w-[7rem] ${cellBorderClass} px-2 py-2 uppercase ${viewedRecently ? mutedTextClass : "text-stone-200/82"} sm:min-w-[8rem] sm:px-2.5">${source}</td>` : ""}
-          <td class="align-middle min-w-[11rem] ${cellBorderClass} px-2 py-2 sm:min-w-[12rem] sm:px-2.5">${nameMarkup}</td>
+          <td class="align-middle min-w-[11rem] ${cellBorderClass} px-2 py-2 sm:min-w-[12rem] sm:px-2.5"><div class="flex min-w-0 flex-col items-start">${nameMarkup}${notificationMarkup}</div></td>
           <td class="align-middle min-w-[5rem] ${cellBorderClass} px-2 py-2 uppercase ${viewedRecently ? mutedTextClass : "text-stone-300/72"} sm:min-w-[5.5rem] sm:px-2.5">${escapeHtml(
             typeLabel
           )}</td>
@@ -12550,6 +12976,10 @@ function renderMobileItemCard(item, tripId, folderId, view = "archive", options 
         sourceLabel
       )}</span>`
     : "";
+  const notificationMarkup = renderNewCommentNotificationBadge(
+    getNewMediaCommentNotificationsForItem(item, tripId, sourceFolderId).length,
+    { className: "mt-1" }
+  );
 
   const authorMarkup = renderItemAuthor(item, { muted: viewedRecently });
   const sizeLabel = item.kind === "text" ? STRINGS.items.textPost : formatBytes(item.size);
@@ -12620,6 +13050,7 @@ function renderMobileItemCard(item, tripId, folderId, view = "archive", options 
             <div class="min-w-0 flex-1">
               ${topLabelMarkup || sourceMarkup ? `<div class="mb-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">${topLabelMarkup}${sourceMarkup}</div>` : ""}
               ${renderMobileItemTitle(item, displayName, tripId, folderId, view, viewedRecently)}
+              ${notificationMarkup}
               ${metaLineMarkup}
               ${descriptionMarkup}
               ${recentViewMarkup}
@@ -13607,7 +14038,7 @@ async function loadAllFolderItemsForTrip(tripId, folders) {
 
 function getSortedItemsForFolder(tripId, folderId, sortMode = ITEM_SORT_MEDIA_DATE_ASC) {
   const items = getItemsForFolder(tripId, folderId);
-  return [...items].sort((left, right) => compareItems(left, right, sortMode));
+  return [...items].sort((left, right) => compareItems(left, right, sortMode, tripId, folderId));
 }
 
 function renderItemSortOptions(selectedMode) {
@@ -13615,6 +14046,8 @@ function renderItemSortOptions(selectedMode) {
     [ITEM_SORT_MEDIA_DATE_DESC, STRINGS.items.sortMediaDateDesc],
     [ITEM_SORT_MEDIA_DATE_ASC, STRINGS.items.sortMediaDateAsc],
     [ITEM_SORT_RECENTLY_ADDED, STRINGS.items.sortRecentlyAdded],
+    [ITEM_SORT_MOST_LIKES, STRINGS.items.sortMostLikes],
+    [ITEM_SORT_MOST_COMMENTS, STRINGS.items.sortMostComments],
   ]
     .map(([value, label]) => {
       const selected = value === selectedMode ? "selected" : "";
@@ -13633,15 +14066,35 @@ function normalizeItemSortMode(value) {
     ITEM_SORT_MEDIA_DATE_DESC,
     ITEM_SORT_MEDIA_DATE_ASC,
     ITEM_SORT_RECENTLY_ADDED,
+    ITEM_SORT_MOST_LIKES,
+    ITEM_SORT_MOST_COMMENTS,
   ].includes(value)
     ? value
     : ITEM_SORT_MEDIA_DATE_ASC;
 }
 
-function compareItems(left, right, sortMode) {
+function compareItems(left, right, sortMode, tripId = "", folderId = "") {
   const sequenceComparison = compareSequenceNamedItems(left, right, sortMode);
   if (sequenceComparison !== null) {
     return sequenceComparison;
+  }
+
+  if (sortMode === ITEM_SORT_MOST_LIKES) {
+    return compareDescending(
+      getSortableMediaLikeCount(left, tripId, folderId),
+      getSortableMediaLikeCount(right, tripId, folderId),
+      left,
+      right
+    );
+  }
+
+  if (sortMode === ITEM_SORT_MOST_COMMENTS) {
+    return compareDescending(
+      getSortableMediaCommentCount(left, tripId, folderId),
+      getSortableMediaCommentCount(right, tripId, folderId),
+      left,
+      right
+    );
   }
 
   if (sortMode === ITEM_SORT_MEDIA_DATE_ASC) {
@@ -13667,7 +14120,7 @@ function compareItems(left, right, sortMode) {
 
 function compareSequenceNamedItems(left, right, sortMode) {
   if (
-    sortMode === ITEM_SORT_RECENTLY_ADDED ||
+    ![ITEM_SORT_MEDIA_DATE_ASC, ITEM_SORT_MEDIA_DATE_DESC].includes(sortMode) ||
     left?.kind !== "file" ||
     right?.kind !== "file"
   ) {
@@ -13697,6 +14150,22 @@ function getSortableMediaDateMs(item) {
   }
 
   return item.createdAtMs;
+}
+
+function getSortableMediaLikeCount(item, tripId, folderId) {
+  if (item?.kind !== "file") {
+    return 0;
+  }
+
+  return getMediaItemInteractionCounts(item, tripId, folderId).likeCount;
+}
+
+function getSortableMediaCommentCount(item, tripId, folderId) {
+  if (item?.kind !== "file") {
+    return 0;
+  }
+
+  return getMediaItemInteractionCounts(item, tripId, folderId).commentCount;
 }
 
 function compareDescending(leftValue, rightValue, leftItem, rightItem) {
@@ -13945,6 +14414,7 @@ function normalizeItem(item) {
     posterDownloadURL: String(item?.posterDownloadURL || ""),
     posterStoragePath: String(item?.posterStoragePath || ""),
     likeCount: Number(item?.likeCount || 0),
+    commentCount: Number(item?.commentCount || 0),
     authorLabel: String(item?.authorLabel || ""),
     authorUid: String(item?.authorUid || ""),
     authorRouteId: normalizeRouteId(item?.authorRouteId),

@@ -266,6 +266,15 @@ service cloud.firestore {
       return hasStoredLikeCount() ? resource.data.likeCount : 0;
     }
 
+    function hasStoredCommentCount() {
+      return resource.data.keys().hasAny(['commentCount'])
+        && resource.data.commentCount is number;
+    }
+
+    function currentCommentCount() {
+      return hasStoredCommentCount() ? resource.data.commentCount : 0;
+    }
+
     function isValidLikeCountUpdate() {
       return isMember()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
@@ -275,6 +284,18 @@ service cloud.firestore {
           request.resource.data.likeCount == currentLikeCount() + 1 ||
           request.resource.data.likeCount == currentLikeCount() - 1 ||
           request.resource.data.likeCount == currentLikeCount()
+        );
+    }
+
+    function isValidCommentCountUpdate() {
+      return isMember()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount'])
+        && request.resource.data.commentCount is number
+        && request.resource.data.commentCount >= 0
+        && (
+          request.resource.data.commentCount == currentCommentCount() + 1 ||
+          request.resource.data.commentCount == currentCommentCount() - 1 ||
+          request.resource.data.commentCount == currentCommentCount()
         );
     }
 
@@ -489,7 +510,8 @@ service cloud.firestore {
           allow update: if isAdmin()
             || isValidMemberTextUpdate()
             || isValidMemberFileUpdate()
-            || isValidLikeCountUpdate();
+            || isValidLikeCountUpdate()
+            || isValidCommentCountUpdate();
           allow delete: if isAdmin() || isItemOwner();
 
           match /likes/{likeId} {

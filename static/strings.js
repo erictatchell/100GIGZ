@@ -108,6 +108,8 @@ export const STRINGS = {
     sortMediaDateDesc: "Date: Newest",
     sortMediaDateAsc: "Date: Oldest",
     sortRecentlyAdded: "Recently Added",
+    sortMostLikes: "Most Likes",
+    sortMostComments: "Most Comments",
     nameColumn: "Name",
     typeColumn: "Type",
     previewColumn: "Preview",
