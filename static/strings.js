@@ -94,7 +94,7 @@ export const STRINGS = {
     uploadDone: "PROFILE IMAGE UPDATED",
     uploadFailed: "Could Not Update Profile Image.",
     saveFailed: "Could Not Update Profile.",
-    currentImage: "Profile Card",
+    currentImage: "",
     saveButton: "Save Changes",
     saveDone: "PROFILE UPDATED. REFRESHING...",
     routeTaken: "THAT ROUTE ID IS ALREADY TAKEN.",

@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import {
   GoogleAuthProvider,
+  getRedirectResult,
   getAuth,
   onAuthStateChanged,
   signInWithRedirect,
@@ -66,6 +67,7 @@ const vaultForm = document.getElementById("vault-form");
 const vaultPasswordInput = document.getElementById("vault-password-input");
 const vaultSubmitButton = document.getElementById("vault-submit-button");
 const vaultStatusText = document.getElementById("vault-status");
+const vaultGoogleButton = document.getElementById("vault-google-signin-button");
 const vaultLegalModal = document.getElementById("vault-legal-modal");
 const vaultLegalBackdrop = document.getElementById("vault-legal-backdrop");
 const vaultLegalCloseButton = document.getElementById("vault-legal-close-button");
@@ -110,6 +112,7 @@ const mobileAdminPanelsControl = document.getElementById("mobile-admin-panels-co
 const mobileAdminPanelsToggle = document.getElementById("mobile-admin-panels-toggle");
 const mobileAdminPanelsToggleText = document.getElementById("mobile-admin-panels-toggle-text");
 const mobileMenuMemberSummary = document.getElementById("mobile-menu-member-summary");
+const mobileMenuArchiveButton = document.getElementById("mobile-menu-archive-button");
 const mobileMenuProfileButton = document.getElementById("mobile-menu-profile-button");
 const mobileMenuActivityButton = document.getElementById("mobile-menu-activity-button");
 const mobileMenuMembersButton = document.getElementById("mobile-menu-members-button");
@@ -118,6 +121,7 @@ const mobileMenuSignInButton = document.getElementById("mobile-menu-sign-in-butt
 const scrollBannerMobileMenuSlot = document.getElementById("scroll-banner-mobile-menu-slot");
 const headerMobileMenuSlot = document.getElementById("header-mobile-menu-slot");
 const bannerRouteToggleLink = document.getElementById("banner-route-toggle-link");
+const bannerActivityButton = document.getElementById("banner-activity-button");
 const bannerGoogleButton = document.getElementById("banner-google-signin-button");
 const bannerSignOutButton = document.getElementById("banner-sign-out-button");
 const desktopAccessPanelSlot = document.getElementById("desktop-access-panel-slot");
@@ -142,6 +146,7 @@ const friendsMobileList = document.getElementById("friends-mobile-list");
 const friendsDesktopTitle = document.getElementById("friends-desktop-title");
 const friendsMobileTitle = document.getElementById("friends-mobile-title");
 const desktopRouteToggleLink = document.getElementById("desktop-route-toggle-link");
+const desktopActivityButton = document.getElementById("desktop-activity-button");
 const archivePage = document.getElementById("archive-page");
 const profilePage = document.getElementById("profile-page");
 const feedPage = document.getElementById("feed-page");
@@ -320,6 +325,19 @@ const ROUTE_MEMBERS = "members";
 const ROUTE_PRIVACY = "privacy";
 const ROUTE_TOS = "tos";
 const ROUTE_UNKNOWN = "unknown";
+const MOBILE_MENU_ROUTE_BUTTON_ACTIVE_CLASSES = [
+  "border-stone-100",
+  "bg-stone-100",
+  "text-black",
+  "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)]",
+];
+const MOBILE_MENU_ROUTE_BUTTON_INACTIVE_CLASSES = [
+  "border-white/12",
+  "bg-white/[0.03]",
+  "text-stone-100",
+  "hover:border-white/30",
+  "hover:bg-white/[0.08]",
+];
 const FEED_SCOPE_ALL = "all";
 const FEED_SCOPE_YOURS = "yours";
 const AUTHOR_ALIAS_BRAND = "brand";
@@ -339,6 +357,7 @@ const PRESENCE_HEARTBEAT_INTERVAL_MS = 60 * 1000;
 const RECENT_MEDIA_VIEW_WINDOW_MS = 3 * 60 * 60 * 1000;
 const RECENT_MEDIA_VIEW_STORAGE_KEY = "100gigz-recent-media-views";
 const GOOGLE_REDIRECT_STORAGE_KEY = "100gigz-google-redirect-requested";
+const GOOGLE_AUTO_REDIRECT_STORAGE_KEY = "100gigz-google-auto-redirect-attempted";
 const ITEM_SORT_MEDIA_DATE_DESC = "media-date-desc";
 const ITEM_SORT_MEDIA_DATE_ASC = "media-date-asc";
 const ITEM_SORT_RECENTLY_ADDED = "recently-added";
@@ -386,6 +405,7 @@ let currentVaultLegalSection = VAULT_LEGAL_DEFAULT_SECTION;
 let lastVaultLegalTrigger = null;
 let currentSocialCommentEditId = "";
 let currentWallPostEditId = "";
+let currentThreadReplyEditId = "";
 let currentMediaCommentsKey = "";
 let mediaCommentsUnsubscribe = null;
 let mediaCommentsByKey = new Map();
@@ -431,7 +451,9 @@ let videoPreviewCommentComposerOpen = false;
 let recentMediaViews = loadRecentMediaViews();
 let presenceHeartbeatTimer = 0;
 let presenceHeartbeatInFlight = false;
+let googleSignInRequestInFlight = false;
 let googleRedirectInProgress = false;
+let googleRedirectResultPending = false;
 let authStateReady = false;
 let vaultState = {
   configured: false,
@@ -470,6 +492,10 @@ function applyStaticStrings() {
     googleButton.textContent = STRINGS.auth.signInButton;
   }
 
+  if (vaultGoogleButton) {
+    vaultGoogleButton.textContent = STRINGS.auth.signInButton;
+  }
+
   if (signOutButton) {
     signOutButton.textContent = STRINGS.auth.signOutButton;
   }
@@ -484,6 +510,10 @@ function applyStaticStrings() {
 
   if (bannerRouteToggleLink) {
     bannerRouteToggleLink.textContent = STRINGS.auth.profile;
+  }
+
+  if (bannerActivityButton) {
+    bannerActivityButton.textContent = "Activity Feed";
   }
 
   if (adminPanelsToggleText) {
@@ -511,12 +541,20 @@ function applyStaticStrings() {
     mobileMenuToggleLabel.textContent = STRINGS.auth.openMenu;
   }
 
+  if (mobileMenuArchiveButton) {
+    mobileMenuArchiveButton.textContent = STRINGS.auth.archive;
+  }
+
   if (mobileMenuProfileButton) {
     mobileMenuProfileButton.textContent = STRINGS.auth.profile;
   }
 
   if (mobileMenuActivityButton) {
     mobileMenuActivityButton.textContent = "Activity Feed";
+  }
+
+  if (desktopActivityButton) {
+    desktopActivityButton.textContent = "Activity Feed";
   }
 
   if (mobileMenuMembersButton) {
@@ -636,6 +674,7 @@ async function initializeVaultExperience() {
     setAppLoadingOverlayVisible(false);
     lockSiteShell();
     showVaultGate();
+    setVaultGoogleButtonVisible(false);
     setVaultFormEnabled(false);
     setVaultFormVisible(true);
     setVaultStatusMessage(
@@ -650,20 +689,19 @@ async function initializeVaultExperience() {
   if (vaultState.unlocked) {
     lockSiteShell();
     hideVaultGateImmediately();
-    setAppLoadingOverlayVisible(true);
+    beginRouteLoadingOverlay();
     const [initResult] = await Promise.allSettled([initializeAppOnce()]);
     if (initResult.status === "rejected") {
       showWarning(getErrorMessage(initResult.reason, "Initialization failed."));
     }
-    revealSiteShell();
-    setAppLoadingOverlayVisible(false);
-    maybeRequestGoogleSignInForUnlockedVault();
+    renderAll();
     return;
   }
 
   setAppLoadingOverlayVisible(false);
   lockSiteShell();
   showVaultGate();
+  setVaultGoogleButtonVisible(false);
   setVaultFormEnabled(true);
   setVaultFormVisible(true);
   setVaultStatusMessage("");
@@ -694,6 +732,7 @@ async function initialize() {
     storage = getStorage(firebaseApp);
   }
 
+  await settleGoogleRedirectResultIfNeeded();
   initializeAuthListener();
   initializeGoogleButton();
   initializeTripBrowserEvents();
@@ -857,6 +896,84 @@ function revealSiteShell() {
   siteShell?.classList.remove("pointer-events-none", "opacity-0");
   siteShell?.setAttribute("aria-hidden", "false");
   document.body.classList.remove("overflow-hidden");
+}
+
+function hasActiveGoogleSession() {
+  return Boolean(auth?.currentUser?.uid || currentUser?.uid);
+}
+
+function hasPendingGoogleRedirectResult() {
+  return Boolean(
+    googleRedirectResultPending ||
+      window.sessionStorage?.getItem(GOOGLE_REDIRECT_STORAGE_KEY) === "1"
+  );
+}
+
+function hasAttemptedGoogleAutoRedirect() {
+  return window.sessionStorage?.getItem(GOOGLE_AUTO_REDIRECT_STORAGE_KEY) === "1";
+}
+
+function setGoogleAutoRedirectAttempted(attempted) {
+  if (attempted) {
+    window.sessionStorage?.setItem(GOOGLE_AUTO_REDIRECT_STORAGE_KEY, "1");
+    return;
+  }
+
+  window.sessionStorage?.removeItem(GOOGLE_AUTO_REDIRECT_STORAGE_KEY);
+}
+
+function ensureAuthenticatedGoogleSession(options = {}) {
+  const message = String(
+    options.message || "SIGN IN WITH GOOGLE TO ENTER 100GIGZ."
+  ).trim();
+
+  if (!vaultState.unlocked) {
+    lockSiteShell();
+    return false;
+  }
+
+  if (!auth || !runtimeConfig || !firestoreReady) {
+    lockSiteShell();
+    beginRouteLoadingOverlay();
+    return false;
+  }
+
+  if (!authStateReady) {
+    lockSiteShell();
+    beginRouteLoadingOverlay();
+    return false;
+  }
+
+  if (hasActiveGoogleSession()) {
+    setVaultGoogleButtonVisible(false);
+    if (!vaultGate?.classList.contains("hidden")) {
+      hideVaultGate();
+    }
+    revealSiteShell();
+    return true;
+  }
+
+  if (hasPendingGoogleRedirectResult()) {
+    lockSiteShell();
+    beginRouteLoadingOverlay();
+    return false;
+  }
+
+  lockSiteShell();
+  setMobileMenuOpen(false);
+  beginRouteLoadingOverlay();
+
+  if (options.redirect !== false) {
+    if (hasAttemptedGoogleAutoRedirect()) {
+      showGoogleSessionGate(message);
+      return false;
+    }
+
+    setGoogleAutoRedirectAttempted(true);
+    void requestGoogleSignIn(message, { redirect: true });
+  }
+
+  return false;
 }
 
 function setAppLoadingOverlayVisible(visible) {
@@ -1039,6 +1156,23 @@ function setVaultFormVisible(visible) {
   vaultForm?.classList.toggle("pointer-events-none", !visible);
 }
 
+function setVaultGoogleButtonVisible(visible) {
+  setElementVisible(vaultGoogleButton, visible, "flex");
+}
+
+function showGoogleSessionGate(message = "SIGN IN WITH GOOGLE TO ENTER 100GIGZ.") {
+  lockSiteShell();
+  showVaultGate();
+  setAppLoadingOverlayVisible(false);
+  setVaultFormVisible(false);
+  setVaultFormEnabled(false);
+  setVaultGoogleButtonVisible(true);
+  setVaultStatusMessage(message.toUpperCase(), false);
+  window.requestAnimationFrame(() => {
+    vaultGoogleButton?.focus();
+  });
+}
+
 function setVaultStatusMessage(message, isError = false) {
   if (!vaultStatusText) {
     return;
@@ -1095,6 +1229,7 @@ async function handleVaultSubmit(event) {
     vaultState = { ...vaultState, unlocked: true };
     setVaultStatusMessage("ACCESS GRANTED.");
     setVaultFormVisible(false);
+    setVaultGoogleButtonVisible(false);
 
     const [initializeResult] = await Promise.allSettled([
       initializeAppOnce(),
@@ -1110,10 +1245,8 @@ async function handleVaultSubmit(event) {
     }
 
     closeVaultLegalModal({ restoreFocus: false });
-    revealSiteShell();
     hideVaultGate();
     renderAll();
-    maybeRequestGoogleSignInForUnlockedVault();
   } catch (error) {
     setVaultFormVisible(true);
     setVaultStatusMessage(
@@ -1261,11 +1394,14 @@ function initializeAuthListener() {
 
   onAuthStateChanged(auth, async (user) => {
     authStateReady = true;
+    googleSignInRequestInFlight = false;
+    googleRedirectInProgress = false;
     currentUser = user;
     currentUserProfile = null;
 
     if (user) {
       window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
+      setGoogleAutoRedirectAttempted(false);
       try {
         currentUserProfile = await syncUserRecord(user);
         syncFeedActivitySubscriptions();
@@ -1275,6 +1411,8 @@ function initializeAuthListener() {
         showWarning(getErrorMessage(error, STRINGS.errors.userSyncFailed));
       }
     } else {
+      lockSiteShell();
+      beginRouteLoadingOverlay();
       stopPresenceHeartbeat();
       friendAccessIssue = false;
       resetTextPostEditor();
@@ -1297,7 +1435,6 @@ function initializeAuthListener() {
 
     syncDefaultAdminMode();
     renderAll();
-    maybeRequestGoogleSignInForUnlockedVault();
   });
 }
 
@@ -1324,6 +1461,7 @@ function setupForms() {
   });
   vaultLegalCloseButton?.addEventListener("click", () => closeVaultLegalModal());
   vaultLegalBackdrop?.addEventListener("click", () => closeVaultLegalModal());
+  vaultGoogleButton?.addEventListener("click", handleGoogleSignIn);
   featuredMessageForm?.addEventListener("submit", handleFeaturedMessageSubmit);
   tripForm?.addEventListener("submit", handleTripSubmit);
   folderForm?.addEventListener("submit", handleFolderSubmit);
@@ -1352,11 +1490,16 @@ function setupForms() {
   videoPreviewCommentForm?.addEventListener("submit", handleVideoPreviewCommentSubmit);
   videoPreviewCommentsList?.addEventListener("click", handleSocialCommentActionClick);
   videoPreviewCommentsList?.addEventListener("submit", handleSocialCommentEditSubmit);
+  videoPreviewThreadRoot?.addEventListener("click", handleSocialCommentActionClick);
+  videoPreviewThreadRoot?.addEventListener("submit", handleSocialCommentEditSubmit);
   videoPreviewThreadList?.addEventListener("click", handleSocialCommentActionClick);
+  videoPreviewThreadList?.addEventListener("submit", handleSocialCommentEditSubmit);
   videoPreviewThreadCloseButton?.addEventListener("click", resetVideoPreviewThreadSelection);
   videoPreviewThreadForm?.addEventListener("submit", handleThreadReplySubmit);
   threadRootEntry?.addEventListener("click", handleSocialCommentActionClick);
+  threadRootEntry?.addEventListener("submit", handleSocialCommentEditSubmit);
   threadList?.addEventListener("click", handleSocialCommentActionClick);
+  threadList?.addEventListener("submit", handleSocialCommentEditSubmit);
   threadCloseButton?.addEventListener("click", resetThreadDialog);
   threadBackdrop?.addEventListener("click", resetThreadDialog);
   threadForm?.addEventListener("submit", handleThreadReplySubmit);
@@ -1372,13 +1515,16 @@ function setupForms() {
   mobileAdminPanelsToggle?.addEventListener("change", handleAdminPanelsToggleChange);
   mobileMenuToggle?.addEventListener("click", handleMobileMenuToggleClick);
   mobileMenuBackdrop?.addEventListener("click", () => setMobileMenuOpen(false));
+  mobileMenuArchiveButton?.addEventListener("click", handleMobileMenuArchiveClick);
   mobileMenuProfileButton?.addEventListener("click", handleMobileMenuProfileClick);
   mobileMenuActivityButton?.addEventListener("click", handleMobileMenuActivityClick);
   mobileMenuMembersButton?.addEventListener("click", handleMobileMenuMembersClick);
   mobileMenuSignOutButton?.addEventListener("click", handleMobileMenuSignOutClick);
   mobileMenuSignInButton?.addEventListener("click", handleMobileMenuSignInClick);
   desktopRouteToggleLink?.addEventListener("click", handleRouteToggleClick);
+  desktopActivityButton?.addEventListener("click", handleDesktopActivityClick);
   bannerRouteToggleLink?.addEventListener("click", handleRouteToggleClick);
+  bannerActivityButton?.addEventListener("click", handleDesktopActivityClick);
   bannerGoogleButton?.addEventListener("click", handleGoogleSignIn);
   uploadTripSelect?.addEventListener("change", renderAdminSelects);
   textTripSelect?.addEventListener("change", renderAdminSelects);
@@ -1423,6 +1569,10 @@ function handleAdminPanelsToggleChange(event) {
 }
 
 function handleMobileMenuToggleClick() {
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
+
   setMobileMenuOpen(!mobileMenuOpen);
 }
 
@@ -1434,9 +1584,16 @@ function navigateFromMobileMenu(route, options = {}) {
   });
 }
 
+function handleMobileMenuArchiveClick() {
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN ARCHIVE." })) {
+    return;
+  }
+
+  navigateFromMobileMenu({ kind: ROUTE_ARCHIVE });
+}
+
 function handleMobileMenuProfileClick() {
-  if (!currentUser?.uid) {
-    requestGoogleSignIn("SIGN IN TO OPEN PROFILE.");
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN PROFILE." })) {
     return;
   }
 
@@ -1444,8 +1601,7 @@ function handleMobileMenuProfileClick() {
 }
 
 function handleMobileMenuActivityClick() {
-  if (!currentUser?.uid) {
-    requestGoogleSignIn("SIGN IN TO OPEN ACTIVITY FEED.");
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN ACTIVITY FEED." })) {
     return;
   }
 
@@ -1453,12 +1609,20 @@ function handleMobileMenuActivityClick() {
 }
 
 function handleMobileMenuMembersClick() {
-  if (!currentUser?.uid) {
-    requestGoogleSignIn("SIGN IN TO OPEN MEMBERS.");
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN MEMBERS." })) {
     return;
   }
 
   navigateFromMobileMenu({ kind: ROUTE_MEMBERS });
+}
+
+function handleDesktopActivityClick() {
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN ACTIVITY FEED." })) {
+    return;
+  }
+
+  beginRouteLoadingOverlay();
+  navigateToRoute({ kind: ROUTE_FEED });
 }
 
 async function handleMobileMenuSignOutClick() {
@@ -1471,6 +1635,11 @@ function handleMobileMenuSignInClick() {
 }
 
 function handleVideoPreviewCommentToggleClick() {
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO COMMENT." })) {
+    setVideoPreviewCommentStatus("SIGN IN TO COMMENT.");
+    return;
+  }
+
   if (!currentUser?.uid || !canUploadMedia()) {
     requestGoogleSignIn("SIGN IN TO COMMENT.");
     setVideoPreviewCommentStatus("SIGN IN TO COMMENT.");
@@ -1746,11 +1915,21 @@ function handleWindowPopstate() {
   renderAll();
 }
 
+function shouldRouteToggleToArchive(route = currentRoute) {
+  return isProfileRoute(route) || isMembersRoute(route) || isFeedRoute(route) || isLegalRoute(route);
+}
+
+function getRouteToggleDestination(route = currentRoute) {
+  return shouldRouteToggleToArchive(route) ? ROUTE_ARCHIVE : getOwnProfileRoute();
+}
+
 function handleRouteToggleClick() {
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO OPEN PROFILE." })) {
+    return;
+  }
+
   beginRouteLoadingOverlay();
-  navigateToRoute(
-    isProfileRoute() || isMembersRoute() || isFeedRoute() || isLegalRoute() ? ROUTE_ARCHIVE : getOwnProfileRoute()
-  );
+  navigateToRoute(getRouteToggleDestination());
 }
 
 function normalizeRoute(pathname) {
@@ -2197,6 +2376,10 @@ function handleDocumentRouteLinkClick(event) {
     return;
   }
 
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
+
   const nextRoute = normalizeRoute(targetUrl.pathname);
 
   if (nextRoute.kind === ROUTE_UNKNOWN) {
@@ -2293,11 +2476,40 @@ function createGoogleProvider() {
   return provider;
 }
 
+async function settleGoogleRedirectResultIfNeeded() {
+  if (!auth || window.sessionStorage?.getItem(GOOGLE_REDIRECT_STORAGE_KEY) !== "1") {
+    return;
+  }
+
+  googleRedirectResultPending = true;
+  lockSiteShell();
+  beginRouteLoadingOverlay();
+
+  try {
+    await getRedirectResult(auth);
+  } catch (error) {
+    if (authDetail) {
+      authDetail.textContent = getFriendlyAuthMessage(error);
+    }
+  } finally {
+    googleRedirectResultPending = false;
+    googleRedirectInProgress = false;
+    googleSignInRequestInFlight = false;
+    window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
+  }
+}
+
 async function requestGoogleSignIn(message = STRINGS.auth.signingIn, options = {}) {
   if (!auth) {
     showWarning("Firebase Auth is not ready. Check the Firebase values in .env.");
     return;
   }
+
+  if (googleSignInRequestInFlight || googleRedirectInProgress || hasPendingGoogleRedirectResult()) {
+    return;
+  }
+
+  googleSignInRequestInFlight = true;
 
   try {
     if (authDetail && message) {
@@ -2316,9 +2528,15 @@ async function requestGoogleSignIn(message = STRINGS.auth.signingIn, options = {
     await signInWithPopup(auth, provider);
   } catch (error) {
     googleRedirectInProgress = false;
+    googleSignInRequestInFlight = false;
     if (authDetail) {
       authDetail.textContent = getFriendlyAuthMessage(error);
     }
+    return;
+  }
+
+  if (!options?.redirect) {
+    googleSignInRequestInFlight = false;
   }
 }
 
@@ -2326,27 +2544,9 @@ async function handleGoogleSignIn() {
   await requestGoogleSignIn();
 }
 
-function maybeRequestGoogleSignInForUnlockedVault() {
-  if (
-    !vaultState.unlocked ||
-    !authStateReady ||
-    !auth ||
-    currentUser?.uid ||
-    googleRedirectInProgress ||
-    window.sessionStorage?.getItem(GOOGLE_REDIRECT_STORAGE_KEY) === "1" ||
-    !runtimeConfig ||
-    !firestoreReady
-  ) {
-    return;
-  }
-
-  googleRedirectInProgress = true;
-  void requestGoogleSignIn("SIGN IN WITH GOOGLE TO ENTER 100GIGZ.", { redirect: true });
-}
-
 async function handleSignOut() {
   try {
-    window.sessionStorage?.setItem(GOOGLE_REDIRECT_STORAGE_KEY, "1");
+    setGoogleAutoRedirectAttempted(true);
     if (auth) {
       await firebaseSignOut(auth);
     }
@@ -2357,6 +2557,11 @@ async function handleSignOut() {
 
 async function handleProfileImageSubmit(event) {
   event.preventDefault();
+
+  if (!ensureAuthenticatedGoogleSession({ message: STRINGS.profile.signInRequired })) {
+    authDetail.textContent = STRINGS.profile.signInRequired;
+    return;
+  }
 
   if (!currentUser?.uid || !db || !storage || !storageReady) {
     authDetail.textContent = STRINGS.profile.signInRequired;
@@ -2554,6 +2759,11 @@ async function handleTripCoverUploadInputChange(input) {
 async function handleVideoPreviewCommentSubmit(event) {
   event.preventDefault();
 
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO COMMENT." })) {
+    setVideoPreviewCommentStatus("SIGN IN TO COMMENT.");
+    return;
+  }
+
   const previewState = getCurrentVideoPreviewState();
   const context = buildMediaCommentContext(previewState);
 
@@ -2649,6 +2859,11 @@ async function handleVideoPreviewCommentSubmit(event) {
 async function handleProfileActivitySubmit(event) {
   event.preventDefault();
 
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO POST." })) {
+    setProfileActivityStatus("SIGN IN TO POST.");
+    return;
+  }
+
   const profileView = getActiveProfileView();
   const targetFriend = profileView?.state === "ready" ? profileView.friend : null;
 
@@ -2721,6 +2936,11 @@ async function handleProfileActivitySubmit(event) {
 }
 
 async function handleMediaItemLikeButtonClick() {
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO LIKE." })) {
+    setVideoPreviewCommentStatus("SIGN IN TO LIKE.");
+    return;
+  }
+
   const context = buildMediaItemLikeContext(getCurrentVideoPreviewState());
 
   if (!context?.targetKey || !db || !currentUser?.uid) {
@@ -2743,9 +2963,19 @@ async function handleMediaItemLikeButtonClick() {
 }
 
 function handleSocialCommentActionClick(event) {
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN WITH GOOGLE TO CONTINUE." })) {
+    return;
+  }
+
   const threadTrigger = event.target.closest("[data-action='open-thread']");
 
-  if (threadTrigger) {
+  if (
+    threadTrigger &&
+    (
+      threadTrigger.tagName === "BUTTON" ||
+      !event.target.closest("a[href], button, input, textarea, select, label, summary, details, form")
+    )
+  ) {
     event.preventDefault();
     void openThreadDialog(threadTrigger);
     return;
@@ -2767,6 +2997,14 @@ function handleSocialCommentActionClick(event) {
     return;
   }
 
+  const editReplyTrigger = event.target.closest("[data-action='edit-thread-reply']");
+
+  if (editReplyTrigger) {
+    event.preventDefault();
+    handleThreadReplyEditClick(editReplyTrigger);
+    return;
+  }
+
   const cancelWallTrigger = event.target.closest("[data-action='cancel-wall-post-edit']");
 
   if (cancelWallTrigger) {
@@ -2785,6 +3023,15 @@ function handleSocialCommentActionClick(event) {
     return;
   }
 
+  const cancelReplyTrigger = event.target.closest("[data-action='cancel-thread-reply-edit']");
+
+  if (cancelReplyTrigger) {
+    event.preventDefault();
+    resetThreadReplyEdit();
+    renderVisibleSocialSurfaces();
+    return;
+  }
+
   const deleteWallTrigger = event.target.closest("[data-action='delete-wall-post']");
 
   if (deleteWallTrigger) {
@@ -2798,6 +3045,14 @@ function handleSocialCommentActionClick(event) {
   if (deleteTrigger) {
     event.preventDefault();
     void handleSocialCommentDeleteClick(deleteTrigger);
+    return;
+  }
+
+  const deleteReplyTrigger = event.target.closest("[data-action='delete-thread-reply']");
+
+  if (deleteReplyTrigger) {
+    event.preventDefault();
+    void handleThreadReplyDeleteClick(deleteReplyTrigger);
     return;
   }
 
@@ -2834,15 +3089,6 @@ function handleSocialCommentActionClick(event) {
     return;
   }
 
-  const targetTrigger = event.target.closest("[data-action='open-activity-target']");
-
-  if (
-    targetTrigger &&
-    !event.target.closest("a[href], button, input, textarea, select, label, summary, details, form")
-  ) {
-    event.preventDefault();
-    handleActivityTargetClick(targetTrigger);
-  }
 }
 
 async function handleSocialLikeToggleClick(trigger) {
@@ -2877,12 +3123,26 @@ function handleSocialCommentEditClick(trigger) {
     return;
   }
 
+  resetThreadReplyEdit();
   resetWallPostEdit();
   currentSocialCommentEditId = context.commentId;
   renderVisibleSocialSurfaces();
 }
 
 async function handleSocialCommentEditSubmit(event) {
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN WITH GOOGLE TO CONTINUE." })) {
+    event.preventDefault();
+    return;
+  }
+
+  const replyForm = event.target.closest("[data-action='save-thread-reply-edit']");
+
+  if (replyForm) {
+    event.preventDefault();
+    await handleThreadReplyEditSubmit(replyForm);
+    return;
+  }
+
   const wallPostForm = event.target.closest("[data-action='save-wall-post-edit']");
 
   if (wallPostForm) {
@@ -2935,8 +3195,22 @@ function handleWallPostEditClick(trigger) {
     return;
   }
 
+  resetThreadReplyEdit();
   resetSocialCommentEdit();
   currentWallPostEditId = context.activityId;
+  renderVisibleSocialSurfaces();
+}
+
+function handleThreadReplyEditClick(trigger) {
+  const context = readThreadReplyActionContext(trigger);
+
+  if (!context?.replyId || !canEditThreadReplyContext(context)) {
+    return;
+  }
+
+  resetSocialCommentEdit();
+  resetWallPostEdit();
+  currentThreadReplyEditId = context.replyId;
   renderVisibleSocialSurfaces();
 }
 
@@ -3026,6 +3300,64 @@ async function handleWallPostDeleteClick(trigger) {
   }
 }
 
+async function handleThreadReplyEditSubmit(form) {
+  const context = readThreadReplyActionContext(form);
+
+  if (!context?.replyId || !canEditThreadReplyContext(context) || !db) {
+    return;
+  }
+
+  const bodyInput = form.querySelector("textarea[name='threadReplyBody']");
+  const body = normalizeSocialBody(bodyInput?.value);
+
+  if (!body && !context.hasAttachment) {
+    setSocialSurfaceStatus("REPLY NEEDS TEXT OR IMAGE.");
+    return;
+  }
+
+  const submitButton = form.querySelector("button[type='submit']");
+  submitButton?.toggleAttribute("disabled", true);
+  setSocialSurfaceStatus("SAVING REPLY.");
+
+  try {
+    await updateThreadReplyBody(context, body);
+    resetThreadReplyEdit();
+    setSocialSurfaceStatus("REPLY UPDATED.");
+  } catch (error) {
+    setSocialSurfaceStatus(getErrorMessage(error, "Could not update reply.").toUpperCase());
+  } finally {
+    submitButton?.toggleAttribute("disabled", false);
+  }
+}
+
+async function handleThreadReplyDeleteClick(trigger) {
+  const context = readThreadReplyActionContext(trigger);
+
+  if (!context?.replyId || !canDeleteThreadReplyContext(context) || !db) {
+    return;
+  }
+
+  const confirmed = window.confirm("Delete this reply everywhere it appears?");
+
+  if (!confirmed) {
+    return;
+  }
+
+  trigger.disabled = true;
+  setSocialSurfaceStatus("DELETING REPLY.");
+
+  try {
+    await deleteThreadReply(context);
+    if (currentThreadReplyEditId === context.replyId) {
+      resetThreadReplyEdit();
+    }
+    setSocialSurfaceStatus("REPLY DELETED.");
+  } catch (error) {
+    setSocialSurfaceStatus(getErrorMessage(error, "Could not delete reply.").toUpperCase());
+    trigger.disabled = false;
+  }
+}
+
 function handleVideoPreviewThreadClick(trigger) {
   const context = readThreadActionContext(trigger);
   const previewState = getCurrentVideoPreviewState();
@@ -3083,37 +3415,6 @@ async function handleActivitySourceClick(trigger) {
   }
 
   setSocialSurfaceStatus("SOURCE ITEM CAN'T BE PREVIEWED.");
-}
-
-function handleActivityTargetClick(trigger) {
-  const context = readActivityTargetContext(trigger);
-  const targetUserUid = String(context?.targetUserUid || "");
-
-  if (!targetUserUid) {
-    return;
-  }
-
-  const profileView = getActiveProfileView();
-
-  if (profileView?.friend?.uid === targetUserUid) {
-    return;
-  }
-
-  if (targetUserUid === currentUser?.uid) {
-    beginRouteLoadingOverlay();
-    navigateToRoute(getOwnProfileRoute());
-    return;
-  }
-
-  const targetFriend = getFriendByUid(targetUserUid);
-
-  if (!targetFriend?.routeId) {
-    setSocialSurfaceStatus("COULD NOT OPEN TARGET WALL.");
-    return;
-  }
-
-  beginRouteLoadingOverlay();
-  navigateToRoute({ kind: ROUTE_PROFILE_PUBLIC, routeId: targetFriend.routeId });
 }
 
 async function resolveActivitySourceItem(context) {
@@ -3236,6 +3537,12 @@ function getThreadReplyComposer(form) {
 
 async function handleThreadReplySubmit(event) {
   event.preventDefault();
+
+  if (!ensureAuthenticatedGoogleSession({ message: "SIGN IN TO COMMENT." })) {
+    setSocialSurfaceStatus("SIGN IN TO COMMENT.");
+    return;
+  }
+
   const form = event.target.closest("form");
   const composer = form ? getThreadReplyComposer(form) : null;
 
@@ -3372,6 +3679,33 @@ async function updateWallPostBody(context, body) {
   await batch.commit();
 }
 
+async function updateThreadReplyBody(context, body) {
+  const replyRef = getThreadReplyDocRef(context);
+
+  if (!replyRef) {
+    throw new Error("Reply is missing.");
+  }
+
+  const replySnapshot = await getDoc(replyRef);
+
+  if (!replySnapshot.exists()) {
+    throw new Error("Reply no longer exists.");
+  }
+
+  const nowMs = Date.now();
+  await setDoc(
+    replyRef,
+    {
+      body,
+      editedAt: serverTimestamp(),
+      editedAtMs: nowMs,
+      updatedAt: serverTimestamp(),
+      updatedAtMs: nowMs,
+    },
+    { merge: true }
+  );
+}
+
 async function deleteSocialComment(context) {
   const commentRef = getMediaCommentDocRef(context);
   const activityUserId = context.activityUserId || context.authorUid || currentUser?.uid || "";
@@ -3384,6 +3718,7 @@ async function deleteSocialComment(context) {
     getDoc(commentRef),
     activityRef ? getDoc(activityRef) : Promise.resolve(null),
   ]);
+  const commentLikeDocs = await collectChildDocs(commentRef, "likes");
   const threadReplyDeletePlan = await collectThreadReplyDeletePlan(threadContext);
   const batch = writeBatch(db);
 
@@ -3395,8 +3730,16 @@ async function deleteSocialComment(context) {
     batch.delete(activityRef);
   }
 
+  commentLikeDocs.forEach((likeDoc) => {
+    batch.delete(likeDoc.ref);
+  });
+
   threadReplyDeletePlan.replyDocs.forEach((replyDoc) => {
     batch.delete(replyDoc.ref);
+  });
+
+  threadReplyDeletePlan.likeDocs.forEach((likeDoc) => {
+    batch.delete(likeDoc.ref);
   });
 
   await batch.commit();
@@ -3423,6 +3766,13 @@ async function deleteWallPost(context) {
   }
 
   const snapshots = await Promise.all(wallPostRefs.map((ref) => getDoc(ref)));
+  const wallPostLikeParentRef = context.targetUserUid && context.activityId
+    ? getActivityDocRef(context.targetUserUid, context.activityId)
+    : null;
+  const wallPostLikeDocs = await collectChildDocs(
+    wallPostLikeParentRef,
+    "likes"
+  );
   const threadReplyDeletePlan = await collectThreadReplyDeletePlan(threadContext);
   const batch = writeBatch(db);
   let hasExistingWallPost = false;
@@ -3436,6 +3786,14 @@ async function deleteWallPost(context) {
 
   threadReplyDeletePlan.replyDocs.forEach((replyDoc) => {
     batch.delete(replyDoc.ref);
+  });
+
+  wallPostLikeDocs.forEach((likeDoc) => {
+    batch.delete(likeDoc.ref);
+  });
+
+  threadReplyDeletePlan.likeDocs.forEach((likeDoc) => {
+    batch.delete(likeDoc.ref);
   });
 
   if (!hasExistingWallPost) {
@@ -3454,10 +3812,50 @@ async function deleteWallPost(context) {
   resetActiveThreadForContext(threadContext);
 }
 
+async function deleteThreadReply(context) {
+  const replyRef = getThreadReplyDocRef(context);
+
+  if (!replyRef) {
+    throw new Error("Reply is missing.");
+  }
+
+  const [replySnapshot, replyLikeDocs] = await Promise.all([
+    getDoc(replyRef),
+    collectChildDocs(replyRef, "likes"),
+  ]);
+
+  if (!replySnapshot.exists()) {
+    throw new Error("Reply no longer exists.");
+  }
+
+  const batch = writeBatch(db);
+  batch.delete(replyRef);
+  replyLikeDocs.forEach((likeDoc) => {
+    batch.delete(likeDoc.ref);
+  });
+  await batch.commit();
+
+  try {
+    await deleteSocialAttachmentIfPossible(context.attachmentStoragePath);
+  } catch (error) {
+    console.warn("Could not delete social attachment.", error);
+  }
+}
+
+async function collectChildDocs(parentRef, childCollectionName) {
+  if (!parentRef || !childCollectionName) {
+    return [];
+  }
+
+  const snapshot = await getDocs(collection(parentRef, childCollectionName));
+  return snapshot.docs;
+}
+
 async function collectThreadReplyDeletePlan(context) {
   if (!db || !runtimeConfig?.collections?.users || !context?.threadOwnerUid || !context?.activityId) {
     return {
       replyDocs: [],
+      likeDocs: [],
       attachmentPaths: [],
     };
   }
@@ -3473,8 +3871,15 @@ async function collectThreadReplyDeletePlan(context) {
     )
   );
 
+  const replyLikeDocs = (
+    await Promise.all(
+      repliesSnapshot.docs.map((replyDoc) => collectChildDocs(replyDoc.ref, "likes"))
+    )
+  ).flat();
+
   return {
     replyDocs: repliesSnapshot.docs,
+    likeDocs: replyLikeDocs,
     attachmentPaths: repliesSnapshot.docs
       .map((replyDoc) => String(replyDoc.data()?.attachmentStoragePath || ""))
       .filter(Boolean),
@@ -4428,6 +4833,11 @@ async function updatePresenceHeartbeat() {
 async function handleProfileDetailsSubmit(event) {
   event.preventDefault();
 
+  if (!ensureAuthenticatedGoogleSession({ message: STRINGS.profile.signInRequired })) {
+    authDetail.textContent = STRINGS.profile.signInRequired;
+    return;
+  }
+
   const profileView = getActiveProfileView();
   const targetFriend = profileView?.state === "ready" ? profileView.friend : null;
   const isEditingSelf = Boolean(targetFriend?.uid && targetFriend.uid === currentUser?.uid);
@@ -4658,6 +5068,10 @@ async function backfillVisibleProfiles(userDocs) {
 async function handleTripSubmit(event) {
   event.preventDefault();
 
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
+
   if (!db || !isAdminViewEnabled()) {
     return;
   }
@@ -4703,6 +5117,10 @@ async function handleTripSubmit(event) {
 
 async function handleFeaturedMessageSubmit(event) {
   event.preventDefault();
+
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
 
   if (!db || !isAdminViewEnabled()) {
     return;
@@ -4798,6 +5216,10 @@ async function handleFeaturedClipToggleClick(trigger) {
 async function handleFolderSubmit(event) {
   event.preventDefault();
 
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
+
   if (!db || !isAdminViewEnabled()) {
     return;
   }
@@ -4839,6 +5261,11 @@ async function handleFolderSubmit(event) {
 
 async function handleUploadSubmit(event) {
   event.preventDefault();
+
+  if (!ensureAuthenticatedGoogleSession({ message: STRINGS.uploads.signInRequired })) {
+    showWarning(STRINGS.uploads.signInRequired);
+    return;
+  }
 
   if (!canUploadMedia()) {
     requestGoogleSignIn(STRINGS.uploads.signInRequired);
@@ -5332,6 +5759,11 @@ function resolveItemAuthorLabel(item) {
 async function handleTextPostSubmit(event) {
   event.preventDefault();
 
+  if (!ensureAuthenticatedGoogleSession({ message: STRINGS.uploads.textSignInRequired })) {
+    showWarning(STRINGS.uploads.textSignInRequired);
+    return;
+  }
+
   if (!canUploadMedia()) {
     requestGoogleSignIn(STRINGS.uploads.textSignInRequired);
     showWarning(STRINGS.uploads.textSignInRequired);
@@ -5395,6 +5827,10 @@ async function handleTextPostSubmit(event) {
 
 async function handleEditTextPostSubmit(event) {
   event.preventDefault();
+
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
 
   if (!db || !currentItemEdit) {
     return;
@@ -5653,6 +6089,10 @@ function resetItemMoveDialog() {
 
 async function handleMoveItemSubmit(event) {
   event.preventDefault();
+
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
 
   if (!db || !currentItemMove || !moveItemFolderSelect) {
     return;
@@ -6569,17 +7009,103 @@ videoPreviewLikeButton.innerHTML = `
 }
 }
 
-function renderMediaComment(comment, options = {}) {
-  const context = buildThreadActionContext(comment);
+function getSocialEntryActor(entry) {
+  return {
+    label: normalizeSocialLabel(entry?.authorLabel || entry?.actorLabel),
+    routeId: normalizeRouteId(entry?.authorRouteId || entry?.actorRouteId),
+    photoURL: String(entry?.authorPhotoURL || entry?.actorPhotoURL || ""),
+  };
+}
+
+function renderSocialEntryContent(entry) {
+  return `${renderSocialEntryBody(entry?.body)}${renderSocialAttachment(entry)}`;
+}
+
+function renderEditableSocialEntryContent(entry) {
+  if (entry?.type === "media-comment" && isEditingSocialComment(entry)) {
+    return renderSocialCommentEditForm(entry);
+  }
+
+  if (entry?.type === "wall-post" && isEditingWallPost(entry)) {
+    return renderWallPostEditForm(entry);
+  }
+
+  if (entry?.type === "thread-reply" && isEditingThreadReply(entry)) {
+    return renderThreadReplyEditForm(entry);
+  }
+
+  return renderSocialEntryContent(entry);
+}
+
+function renderSocialEntryTypeControls(entry) {
+  if (entry?.type === "media-comment") {
+    return renderSocialCommentControls(entry);
+  }
+
+  if (entry?.type === "wall-post") {
+    return renderWallPostControls(entry);
+  }
+
+  if (entry?.type === "thread-reply") {
+    return renderThreadReplyControls(entry);
+  }
+
+  return "";
+}
+
+function renderSocialEntryCard(entry, options = {}) {
+  const actor = getSocialEntryActor(entry);
   const actorMarkup = renderSocialActorLink(
-    comment.authorLabel,
-    comment.authorRouteId,
+    actor.label,
+    actor.routeId,
     "text-stone-100 transition hover:text-white hover:underline"
   );
-  const controlsMarkup = renderSocialCommentControls(comment);
-  const bodyMarkup = isEditingSocialComment(comment)
-    ? renderSocialCommentEditForm(comment)
-    : `${renderSocialBody(comment.body)}${renderSocialAttachment(comment)}`;
+  const articleClass = [
+    "border border-white/10 bg-black/24 p-3 sm:p-4",
+    options.interactive ? "cursor-pointer transition hover:border-white/22 hover:bg-black/32" : "",
+    options.cardClass || "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const headerMetaMarkup = [
+    `<span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry?.createdAtMs))}</span>`,
+    entry?.editedAtMs ? `<span class="text-stone-400/42">EDITED</span>` : "",
+    options.headerMetaMarkup || "",
+  ]
+    .filter(Boolean)
+    .join("");
+  const articleAttrs = options.articleAttrs ? ` ${options.articleAttrs}` : "";
+  const articleTitle = options.title ? ` title="${escapeHtml(options.title)}"` : "";
+  const wrapperStart = options.wrapperClass ? `<div class="${options.wrapperClass}">` : "";
+  const wrapperEnd = options.wrapperClass ? "</div>" : "";
+
+  return `
+    ${wrapperStart}
+    <article class="${articleClass}"${articleAttrs}${articleTitle}>
+      <div class="flex items-start gap-3">
+        <img src="${escapeHtml(getSocialPhotoUrl(actor.photoURL))}" alt="${escapeHtml(actor.label)}" class="h-10 w-10 shrink-0 border border-white/10 bg-black object-cover object-center">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
+              ${actorMarkup}
+              ${headerMetaMarkup}
+            </div>
+            ${options.controlsMarkup || ""}
+          </div>
+          ${options.actionLabel ? `<p class="mt-1 break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-300/58">${escapeHtml(options.actionLabel)}</p>` : ""}
+          ${options.bodyMarkup ?? ""}
+          ${options.secondaryMarkup ?? ""}
+          ${options.interactionMarkup ?? ""}
+          ${options.footerMarkup ?? ""}
+        </div>
+      </div>
+    </article>
+    ${wrapperEnd}
+  `;
+}
+
+function renderMediaComment(comment, options = {}) {
+  const context = buildThreadActionContext(comment);
   const interactionMarkup = renderSocialInteractionBar(comment, { includeReplyCount: false });
   const replyButtonMarkup = context.threadOwnerUid && context.activityId
     ? `
@@ -6595,31 +7121,13 @@ function renderMediaComment(comment, options = {}) {
       </div>
     `
     : "";
-  const editedMarkup = comment.editedAtMs
-    ? `<span class="text-stone-400/42">EDITED</span>`
-    : "";
-  const articleClass = "border border-white/10 bg-black/24 p-3";
-
-  return `
-    <article class="${articleClass}" data-media-comment-id="${escapeHtml(comment.id)}">
-      <div class="flex items-start gap-3">
-        <img src="${escapeHtml(getSocialPhotoUrl(comment.authorPhotoURL))}" alt="${escapeHtml(comment.authorLabel)}" class="h-9 w-9 shrink-0 border border-white/10 bg-black object-cover object-center">
-        <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
-              ${actorMarkup}
-              <span class="text-stone-400/58">${escapeHtml(formatActivityTime(comment.createdAtMs))}</span>
-              ${editedMarkup}
-            </div>
-            ${controlsMarkup}
-          </div>
-          ${bodyMarkup}
-          ${interactionMarkup}
-          ${replyButtonMarkup}
-        </div>
-      </div>
-    </article>
-  `;
+  return renderSocialEntryCard(comment, {
+    articleAttrs: `data-media-comment-id="${escapeHtml(comment.id)}"`,
+    controlsMarkup: renderSocialEntryTypeControls(comment),
+    bodyMarkup: renderEditableSocialEntryContent(comment),
+    interactionMarkup,
+    footerMarkup: replyButtonMarkup,
+  });
 }
 
 function syncProfileActivitySubscription(userId) {
@@ -6725,65 +7233,28 @@ function getProfileActivityPlaceholder(profileView) {
 }
 
 function renderActivityEntry(entry, profileFriend, isSelf = false) {
-  const actorMarkup = renderSocialActorLink(
-    entry.actorLabel,
-    entry.actorRouteId,
-    "text-stone-100 transition hover:text-white hover:underline"
-  );
   const actionLabel = buildActivityActionLabel(entry, profileFriend, isSelf);
   const articleActionAttrs = entry.type === "media-comment"
     ? renderActivitySourceAttributes(entry)
     : entry.type === "wall-post"
-      ? renderActivityTargetAttributes(entry)
+      ? renderWallPostThreadAttributes(entry)
     : "";
-  const articleClass = entry.type === "media-comment"
-    ? "border border-white/10 bg-black/24 p-3 transition hover:border-white/20 hover:bg-black/30 sm:p-4 cursor-pointer"
-    : entry.type === "wall-post"
-      ? "border border-white/10 bg-black/24 p-3 transition hover:border-white/20 hover:bg-black/30 sm:p-4 cursor-pointer"
-    : "border border-white/10 bg-black/24 p-3 sm:p-4";
-  const controlsMarkup = entry.type === "media-comment"
-    ? renderSocialCommentControls(entry)
-    : entry.type === "wall-post"
-      ? renderWallPostControls(entry)
-      : "";
-  const threadButtonMarkup = entry.type === "wall-post" ? renderThreadOpenButton(entry) : "";
-  const bodyMarkup = entry.type === "media-comment" && isEditingSocialComment(entry)
-    ? renderSocialCommentEditForm(entry)
-    : entry.type === "wall-post" && isEditingWallPost(entry)
-      ? renderWallPostEditForm(entry)
-      : `${renderSocialBody(entry.body)}${renderSocialAttachment(entry)}`;
+  const wallTargetLinkMarkup = entry.type === "wall-post" ? renderWallTargetLink(entry) : "";
   const interactionMarkup = renderSocialInteractionBar(entry);
-  const editedMarkup = entry.editedAtMs
-    ? `<span class="text-stone-400/42">EDITED</span>`
-    : "";
-
-  return `
-    <article class="${articleClass}" ${articleActionAttrs}${
-      entry.type === "media-comment"
-        ? ' title="Open source item and thread"'
-        : entry.type === "wall-post"
-          ? ' title="Open target wall"'
-          : ""
-    }>
-      <div class="flex items-start gap-3">
-        <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-10 w-10 shrink-0 border border-white/10 bg-black object-cover object-center">
-        <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
-              ${actorMarkup}
-              <span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry.createdAtMs))}</span>
-              ${editedMarkup}
-            </div>
-            ${controlsMarkup}
-          </div>
-          <p class="mt-1 break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-300/58">${escapeHtml(actionLabel)}</p>
-          ${bodyMarkup}
-          ${interactionMarkup}
-          ${threadButtonMarkup}
-        </div>
-      </div>
-    </article>
-  `;
+  return renderSocialEntryCard(entry, {
+    articleAttrs: articleActionAttrs,
+    interactive: entry.type === "media-comment" || entry.type === "wall-post",
+    title: entry.type === "media-comment"
+      ? "Open source item and thread"
+      : entry.type === "wall-post"
+        ? "Open wall post thread"
+        : "",
+    controlsMarkup: renderSocialEntryTypeControls(entry),
+    actionLabel,
+    bodyMarkup: renderEditableSocialEntryContent(entry),
+    interactionMarkup,
+    footerMarkup: wallTargetLinkMarkup,
+  });
 }
 
 function buildActivityActionLabel(entry, profileFriend, isSelf = false) {
@@ -6890,25 +7361,22 @@ function buildMediaItemLikeContext(previewState = getCurrentVideoPreviewState())
 }
 
 function normalizeThreadRootEntry(entry) {
+  const type = String(entry?.type || "media-comment");
+
+  if (type === "wall-post") {
+    return normalizeActivityEntry({ ...entry, type });
+  }
+
+  const normalizedComment = normalizeMediaComment({ ...entry, type });
+
   return {
-    id: String(entry?.id || ""),
-    type: String(entry?.type || "media-comment"),
-    body: normalizeSocialBody(entry?.body),
-    actorUid: String(entry?.actorUid || entry?.authorUid || ""),
-    actorLabel: normalizeSocialLabel(entry?.actorLabel || entry?.authorLabel),
-    actorRouteId: normalizeRouteId(entry?.actorRouteId || entry?.authorRouteId),
-    actorPhotoURL: String(entry?.actorPhotoURL || entry?.authorPhotoURL || ""),
+    ...normalizedComment,
+    actorUid: String(entry?.actorUid || normalizedComment.authorUid || ""),
+    actorLabel: normalizeSocialLabel(entry?.actorLabel || normalizedComment.authorLabel),
+    actorRouteId: normalizeRouteId(entry?.actorRouteId || normalizedComment.authorRouteId),
+    actorPhotoURL: String(entry?.actorPhotoURL || normalizedComment.authorPhotoURL || ""),
     targetUserUid: String(entry?.targetUserUid || ""),
     targetUserLabel: normalizeSocialLabel(entry?.targetUserLabel),
-    itemName: String(entry?.itemName || ""),
-    sourceLabel: String(entry?.sourceLabel || ""),
-    attachmentURL: String(entry?.attachmentURL || ""),
-    attachmentStoragePath: String(entry?.attachmentStoragePath || ""),
-    attachmentMimeType: String(entry?.attachmentMimeType || ""),
-    attachmentName: String(entry?.attachmentName || ""),
-    likeCount: Number(entry?.likeCount || 0),
-    createdAtMs: coerceTimestampToMs(entry?.createdAt, entry?.createdAtMs),
-    editedAtMs: coerceTimestampToMs(entry?.editedAt, entry?.editedAtMs),
   };
 }
 
@@ -6983,6 +7451,48 @@ function renderSocialInteractionBar(entry, options = {}) {
   `;
 }
 
+function renderSocialEntryControls(options = {}) {
+  const canEdit = Boolean(options.canEdit);
+  const canDelete = Boolean(options.canDelete);
+
+  if (!canEdit && !canDelete) {
+    return "";
+  }
+
+  const buttonClass = getSocialMenuItemButtonClass();
+  const deleteButtonClass = getSocialMenuItemButtonClass("delete");
+  const contextAttrs = options.contextAttrs || "";
+  const menuLabel = escapeHtml(options.menuLabel || "Entry actions");
+
+  return `
+    <details class="relative shrink-0">
+      <summary class="flex h-7 w-7 cursor-pointer list-none items-center justify-center border border-white/10 bg-black/40 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none tracking-[0.08em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08] [&::-webkit-details-marker]:hidden" aria-label="${menuLabel}">
+        ...
+      </summary>
+      <div class="absolute right-0 top-[calc(100%+0.35rem)] z-30 w-28 border border-white/12 bg-neutral-950/98 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.45)]">
+        ${
+          canEdit
+            ? `
+              <button type="button" data-action="${escapeHtml(options.editAction || "")}" ${contextAttrs} class="${buttonClass}">
+                Edit
+              </button>
+            `
+            : ""
+        }
+        ${
+          canDelete
+            ? `
+              <button type="button" data-action="${escapeHtml(options.deleteAction || "")}" ${contextAttrs} class="${deleteButtonClass}">
+                Delete
+              </button>
+            `
+            : ""
+        }
+      </div>
+    </details>
+  `;
+}
+
 function renderSocialCommentControls(entry) {
   if (entry?.type !== "media-comment") {
     return "";
@@ -6992,41 +7502,14 @@ function renderSocialCommentControls(entry) {
   const canEdit = canEditSocialCommentContext(context);
   const canDelete = canDeleteSocialCommentContext(context);
 
-  if (!canEdit && !canDelete) {
-    return "";
-  }
-
-  const buttonClass = getSocialMenuItemButtonClass();
-  const deleteButtonClass = getSocialMenuItemButtonClass("delete");
-  const contextAttrs = renderSocialCommentActionAttributes(context);
-
-  return `
-    <details class="relative shrink-0">
-      <summary class="flex h-7 w-7 cursor-pointer list-none items-center justify-center border border-white/10 bg-black/40 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none tracking-[0.08em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08] [&::-webkit-details-marker]:hidden" aria-label="Comment actions">
-        ...
-      </summary>
-      <div class="absolute right-0 top-[calc(100%+0.35rem)] z-30 w-28 border border-white/12 bg-neutral-950/98 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.45)]">
-        ${
-          canEdit
-            ? `
-              <button type="button" data-action="edit-comment" ${contextAttrs} class="${buttonClass}">
-                Edit
-              </button>
-            `
-            : ""
-        }
-        ${
-          canDelete
-            ? `
-              <button type="button" data-action="delete-comment" ${contextAttrs} class="${deleteButtonClass}">
-                Delete
-              </button>
-            `
-            : ""
-        }
-      </div>
-    </details>
-  `;
+  return renderSocialEntryControls({
+    canEdit,
+    canDelete,
+    contextAttrs: renderSocialCommentActionAttributes(context),
+    editAction: "edit-comment",
+    deleteAction: "delete-comment",
+    menuLabel: "Comment actions",
+  });
 }
 
 function renderWallPostControls(entry) {
@@ -7038,104 +7521,56 @@ function renderWallPostControls(entry) {
   const canEdit = canEditWallPostContext(context);
   const canDelete = canDeleteWallPostContext(context);
 
-  if (!canEdit && !canDelete) {
+  return renderSocialEntryControls({
+    canEdit,
+    canDelete,
+    contextAttrs: renderWallPostActionAttributes(context),
+    editAction: "edit-wall-post",
+    deleteAction: "delete-wall-post",
+    menuLabel: "Wall post actions",
+  });
+}
+
+function renderThreadReplyControls(entry) {
+  if (entry?.type !== "thread-reply") {
     return "";
   }
 
-  const buttonClass = getSocialMenuItemButtonClass();
-  const deleteButtonClass = getSocialMenuItemButtonClass("delete");
-  const contextAttrs = renderWallPostActionAttributes(context);
+  const context = buildThreadReplyActionContext(entry);
+  const canEdit = canEditThreadReplyContext(context);
+  const canDelete = canDeleteThreadReplyContext(context);
 
-  return `
-    <details class="relative shrink-0">
-      <summary class="flex h-7 w-7 cursor-pointer list-none items-center justify-center border border-white/10 bg-black/40 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none tracking-[0.08em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08] [&::-webkit-details-marker]:hidden" aria-label="Wall post actions">
-        ...
-      </summary>
-      <div class="absolute right-0 top-[calc(100%+0.35rem)] z-30 w-28 border border-white/12 bg-neutral-950/98 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.45)]">
-        ${
-          canEdit
-            ? `
-              <button type="button" data-action="edit-wall-post" ${contextAttrs} class="${buttonClass}">
-                Edit
-              </button>
-            `
-            : ""
-        }
-        ${
-          canDelete
-            ? `
-              <button type="button" data-action="delete-wall-post" ${contextAttrs} class="${deleteButtonClass}">
-                Delete
-              </button>
-            `
-            : ""
-        }
-      </div>
-    </details>
-  `;
+  return renderSocialEntryControls({
+    canEdit,
+    canDelete,
+    contextAttrs: renderThreadReplyActionAttributes(context),
+    editAction: "edit-thread-reply",
+    deleteAction: "delete-thread-reply",
+    menuLabel: "Reply actions",
+  });
 }
 
 function renderThreadRootEntry(entry, options = {}) {
-  const actorMarkup = renderSocialActorLink(
-    entry.actorLabel,
-    entry.actorRouteId,
-    "text-stone-100 transition hover:text-white hover:underline"
-  );
   const showActionLabel = options.showActionLabel !== false;
   const actionLabel = showActionLabel ? buildThreadRootActionLabel(entry) : "";
   const interactionMarkup = renderSocialInteractionBar(entry, { includeReplyCount: false });
-  const editedMarkup = entry.editedAtMs
-    ? `<span class="text-stone-400/42">EDITED</span>`
-    : "";
-
-  return `
-    <article class="border border-white/10 bg-black/20 p-3 sm:p-4" data-thread-root-entry="${escapeHtml(entry.id)}">
-      <div class="flex items-start gap-3">
-        <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-10 w-10 shrink-0 border border-white/10 bg-black object-cover object-center">
-        <div class="min-w-0 flex-1">
-          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
-            ${actorMarkup}
-            <span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry.createdAtMs))}</span>
-            ${editedMarkup}
-          </div>
-          ${actionLabel ? `<p class="mt-1 break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-300/58">${escapeHtml(actionLabel)}</p>` : ""}
-          ${renderSocialBody(entry.body)}
-          ${renderSocialAttachment(entry)}
-          ${interactionMarkup}
-        </div>
-      </div>
-    </article>
-  `;
+  return renderSocialEntryCard(entry, {
+    articleAttrs: `data-thread-root-entry="${escapeHtml(entry.id)}"`,
+    controlsMarkup: renderSocialEntryTypeControls(entry),
+    actionLabel,
+    bodyMarkup: renderEditableSocialEntryContent(entry),
+    interactionMarkup,
+  });
 }
 
 function renderThreadReply(reply) {
-  const actorMarkup = renderSocialActorLink(
-    reply.actorLabel,
-    reply.actorRouteId,
-    "text-stone-100 transition hover:text-white hover:underline"
-  );
   const interactionMarkup = renderSocialInteractionBar(reply, { includeReplyCount: false });
-  const editedMarkup = reply.editedAtMs
-    ? `<span class="text-stone-400/42">EDITED</span>`
-    : "";
-
-  return `
-    <article class="ml-4 border border-white/10 border-l-white/18 bg-black/20 p-3 sm:ml-6">
-      <div class="flex items-start gap-3">
-        <img src="${escapeHtml(getSocialPhotoUrl(reply.actorPhotoURL))}" alt="${escapeHtml(reply.actorLabel)}" class="h-9 w-9 shrink-0 border border-white/10 bg-black object-cover object-center">
-        <div class="min-w-0 flex-1">
-          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
-            ${actorMarkup}
-            <span class="text-stone-400/58">${escapeHtml(formatActivityTime(reply.createdAtMs))}</span>
-            ${editedMarkup}
-          </div>
-          ${renderSocialBody(reply.body)}
-          ${renderSocialAttachment(reply)}
-          ${interactionMarkup}
-        </div>
-      </div>
-    </article>
-  `;
+  return renderSocialEntryCard(reply, {
+    wrapperClass: "ml-4 sm:ml-6",
+    controlsMarkup: renderSocialEntryTypeControls(reply),
+    bodyMarkup: renderEditableSocialEntryContent(reply),
+    interactionMarkup,
+  });
 }
 
 function buildThreadRootActionLabel(entry) {
@@ -7201,52 +7636,62 @@ function buildPreviewThreadContextLabel(entry) {
   return parts.join(" // ");
 }
 
-function renderSocialCommentEditForm(entry) {
-  const context = buildSocialCommentActionContext(entry);
-  const contextAttrs = renderSocialCommentActionAttributes(context);
+function renderSocialEntryEditForm(options = {}) {
   const buttonClass = getSocialActionButtonClass();
   const deleteButtonClass = getSocialActionButtonClass("delete");
 
   return `
-    <form data-action="save-comment-edit" ${contextAttrs} class="mt-3 space-y-2">
+    <form data-action="${escapeHtml(options.formAction || "")}" ${options.contextAttrs || ""} class="mt-3 space-y-2">
       <textarea
-        name="commentBody"
+        name="${escapeHtml(options.textareaName || "commentBody")}"
         rows="3"
         maxlength="${MAX_SOCIAL_BODY_LENGTH}"
         autocapitalize="off"
         spellcheck="true"
-        class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] tracking-[0.12em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35"
-      >${escapeHtml(entry.body || "")}</textarea>
+        class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 font-['Arial_Narrow','Helvetica_Neue',Arial,sans-serif] text-[0.96rem] font-semibold leading-5 tracking-[0.03em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35"
+      >${escapeHtml(options.body || "")}</textarea>
       <div class="flex flex-wrap items-center gap-1.5">
         <button type="submit" class="${buttonClass}">Save</button>
-        <button type="button" data-action="cancel-comment-edit" class="${deleteButtonClass}">Cancel</button>
+        <button type="button" data-action="${escapeHtml(options.cancelAction || "")}" class="${deleteButtonClass}">Cancel</button>
       </div>
     </form>
   `;
 }
 
+function renderSocialCommentEditForm(entry) {
+  const context = buildSocialCommentActionContext(entry);
+
+  return renderSocialEntryEditForm({
+    formAction: "save-comment-edit",
+    contextAttrs: renderSocialCommentActionAttributes(context),
+    textareaName: "commentBody",
+    body: entry.body || "",
+    cancelAction: "cancel-comment-edit",
+  });
+}
+
 function renderWallPostEditForm(entry) {
   const context = buildWallPostActionContext(entry);
-  const contextAttrs = renderWallPostActionAttributes(context);
-  const buttonClass = getSocialActionButtonClass();
-  const deleteButtonClass = getSocialActionButtonClass("delete");
 
-  return `
-    <form data-action="save-wall-post-edit" ${contextAttrs} class="mt-3 space-y-2">
-      <textarea
-        name="wallPostBody"
-        rows="3"
-        maxlength="${MAX_SOCIAL_BODY_LENGTH}"
-        autocapitalize="off"
-        spellcheck="true"
-        class="w-full resize-y border border-white/12 bg-black/40 px-3 py-3 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] tracking-[0.12em] text-stone-100 outline-none transition placeholder:text-stone-400/40 focus:border-white/35"
-      >${escapeHtml(entry.body || "")}</textarea>
-      <div class="flex flex-wrap items-center gap-1.5">
-        <button type="submit" class="${buttonClass}">Save</button>
-        <button type="button" data-action="cancel-wall-post-edit" class="${deleteButtonClass}">Cancel</button>
-      </div>
-    </form>
-  `;
+  return renderSocialEntryEditForm({
+    formAction: "save-wall-post-edit",
+    contextAttrs: renderWallPostActionAttributes(context),
+    textareaName: "wallPostBody",
+    body: entry.body || "",
+    cancelAction: "cancel-wall-post-edit",
+  });
+}
+
+function renderThreadReplyEditForm(entry) {
+  const context = buildThreadReplyActionContext(entry);
+
+  return renderSocialEntryEditForm({
+    formAction: "save-thread-reply-edit",
+    contextAttrs: renderThreadReplyActionAttributes(context),
+    textareaName: "threadReplyBody",
+    body: entry.body || "",
+    cancelAction: "cancel-thread-reply-edit",
+  });
 }
 
 function buildSocialCommentActionContext(entry) {
@@ -7269,6 +7714,17 @@ function buildWallPostActionContext(entry) {
     activityId: String(entry?.id || ""),
     actorUid: String(entry?.actorUid || ""),
     targetUserUid: String(entry?.targetUserUid || ""),
+    attachmentStoragePath: String(entry?.attachmentStoragePath || ""),
+    hasAttachment: Boolean(entry?.attachmentURL || entry?.attachmentStoragePath),
+  };
+}
+
+function buildThreadReplyActionContext(entry) {
+  return {
+    replyId: String(entry?.id || ""),
+    threadOwnerUid: String(entry?.threadOwnerUid || ""),
+    activityId: String(entry?.activityId || ""),
+    actorUid: String(entry?.actorUid || ""),
     attachmentStoragePath: String(entry?.attachmentStoragePath || ""),
     hasAttachment: Boolean(entry?.attachmentURL || entry?.attachmentStoragePath),
   };
@@ -7330,7 +7786,7 @@ function buildSocialLikeActionContext(entry) {
   return null;
 }
 
-function renderThreadOpenButton(entry) {
+function renderWallPostThreadAttributes(entry) {
   if (entry?.type !== "wall-post") {
     return "";
   }
@@ -7341,16 +7797,44 @@ function renderThreadOpenButton(entry) {
     return "";
   }
 
+  return `data-action="open-thread" ${renderThreadActionAttributes(context)}`;
+}
+
+function renderWallTargetLink(entry) {
+  if (entry?.type !== "wall-post") {
+    return "";
+  }
+
+  const targetUserUid = String(entry?.targetUserUid || "");
+
+  if (!targetUserUid) {
+    return "";
+  }
+
+  const targetFriend = getFriendByUid(targetUserUid);
+  const targetHref = targetUserUid === currentUser?.uid
+    ? resolveRoutePath(getOwnProfileRoute())
+    : targetFriend?.routeId
+      ? buildProfilePath(targetFriend.routeId)
+      : "";
+
+  if (!targetHref) {
+    return "";
+  }
+
+  const targetLabel = normalizeSocialLabel(
+    entry?.targetUserLabel || getFriendLabel(targetFriend)
+  );
+
   return `
     <div class="mt-3">
-      <button
-        type="button"
-        data-action="open-thread"
-        ${renderThreadActionAttributes(context)}
+      <a
+        href="${escapeHtml(targetHref)}"
         class="${getSocialActionButtonClass()}"
+        title="Open ${escapeHtml(targetLabel)}'s wall"
       >
-        Thread
-      </button>
+        View Wall
+      </a>
     </div>
   `;
 }
@@ -7385,15 +7869,6 @@ function renderSocialLikeActionAttributes(context) {
     .join(" ");
 }
 
-function renderActivityTargetAttributes(entry) {
-  return [
-    ["data-action", "open-activity-target"],
-    ["data-target-user-uid", String(entry?.targetUserUid || "")],
-  ]
-    .map(([name, value]) => `${name}="${escapeHtml(value)}"`)
-    .join(" ");
-}
-
 function renderSocialCommentActionAttributes(context) {
   return [
     ["data-comment-id", context.commentId],
@@ -7414,6 +7889,19 @@ function renderWallPostActionAttributes(context) {
     ["data-activity-id", context.activityId],
     ["data-actor-uid", context.actorUid],
     ["data-target-user-uid", context.targetUserUid],
+    ["data-attachment-storage-path", context.attachmentStoragePath],
+    ["data-has-attachment", context.hasAttachment ? "true" : "false"],
+  ]
+    .map(([name, value]) => `${name}="${escapeHtml(value)}"`)
+    .join(" ");
+}
+
+function renderThreadReplyActionAttributes(context) {
+  return [
+    ["data-reply-id", context.replyId],
+    ["data-thread-owner-uid", context.threadOwnerUid],
+    ["data-activity-id", context.activityId],
+    ["data-actor-uid", context.actorUid],
     ["data-attachment-storage-path", context.attachmentStoragePath],
     ["data-has-attachment", context.hasAttachment ? "true" : "false"],
   ]
@@ -7459,16 +7947,6 @@ function readActivitySourceContext(element) {
   };
 }
 
-function readActivityTargetContext(element) {
-  if (!element) {
-    return null;
-  }
-
-  return {
-    targetUserUid: String(element.getAttribute("data-target-user-uid") || ""),
-  };
-}
-
 function readWallPostActionContext(element) {
   if (!element) {
     return null;
@@ -7478,6 +7956,21 @@ function readWallPostActionContext(element) {
     activityId: String(element.getAttribute("data-activity-id") || ""),
     actorUid: String(element.getAttribute("data-actor-uid") || ""),
     targetUserUid: String(element.getAttribute("data-target-user-uid") || ""),
+    attachmentStoragePath: String(element.getAttribute("data-attachment-storage-path") || ""),
+    hasAttachment: element.getAttribute("data-has-attachment") === "true",
+  };
+}
+
+function readThreadReplyActionContext(element) {
+  if (!element) {
+    return null;
+  }
+
+  return {
+    replyId: String(element.getAttribute("data-reply-id") || ""),
+    threadOwnerUid: String(element.getAttribute("data-thread-owner-uid") || ""),
+    activityId: String(element.getAttribute("data-activity-id") || ""),
+    actorUid: String(element.getAttribute("data-actor-uid") || ""),
     attachmentStoragePath: String(element.getAttribute("data-attachment-storage-path") || ""),
     hasAttachment: element.getAttribute("data-has-attachment") === "true",
   };
@@ -7618,6 +8111,10 @@ function getCurrentThreadReplies() {
     : [];
 }
 
+function canModerateSocialEntryAsAdmin() {
+  return Boolean(currentUser?.uid && isAdminViewEnabled());
+}
+
 function canEditSocialCommentContext(context) {
   return Boolean(
     context?.commentId &&
@@ -7625,7 +8122,7 @@ function canEditSocialCommentContext(context) {
       context.folderId &&
       context.itemId &&
       currentUser?.uid &&
-      context.authorUid === currentUser.uid
+      (context.authorUid === currentUser.uid || canModerateSocialEntryAsAdmin())
   );
 }
 
@@ -7633,7 +8130,7 @@ function canEditWallPostContext(context) {
   return Boolean(
     context?.activityId &&
       currentUser?.uid &&
-      context.actorUid === currentUser.uid
+      (context.actorUid === currentUser.uid || canModerateSocialEntryAsAdmin())
   );
 }
 
@@ -7644,7 +8141,7 @@ function canDeleteSocialCommentContext(context) {
       context.folderId &&
       context.itemId &&
       currentUser?.uid &&
-      (context.authorUid === currentUser.uid || isAdminViewEnabled())
+      (context.authorUid === currentUser.uid || canModerateSocialEntryAsAdmin())
   );
 }
 
@@ -7655,8 +8152,28 @@ function canDeleteWallPostContext(context) {
       (
         context.actorUid === currentUser.uid ||
         context.targetUserUid === currentUser.uid ||
-        isAdminViewEnabled()
+        canModerateSocialEntryAsAdmin()
       )
+  );
+}
+
+function canEditThreadReplyContext(context) {
+  return Boolean(
+    context?.replyId &&
+      context.threadOwnerUid &&
+      context.activityId &&
+      currentUser?.uid &&
+      (context.actorUid === currentUser.uid || canModerateSocialEntryAsAdmin())
+  );
+}
+
+function canDeleteThreadReplyContext(context) {
+  return Boolean(
+    context?.replyId &&
+      context.threadOwnerUid &&
+      context.activityId &&
+      currentUser?.uid &&
+      (context.actorUid === currentUser.uid || canModerateSocialEntryAsAdmin())
   );
 }
 
@@ -7668,12 +8185,20 @@ function isEditingWallPost(entry) {
   return Boolean(entry?.id && currentWallPostEditId === entry.id);
 }
 
+function isEditingThreadReply(entry) {
+  return Boolean(entry?.id && currentThreadReplyEditId === entry.id);
+}
+
 function resetSocialCommentEdit() {
   currentSocialCommentEditId = "";
 }
 
 function resetWallPostEdit() {
   currentWallPostEditId = "";
+}
+
+function resetThreadReplyEdit() {
+  currentThreadReplyEditId = "";
 }
 
 function isCurrentThreadContext(context) {
@@ -7690,6 +8215,7 @@ function clearActiveThreadState() {
   currentThreadContext = null;
   currentThreadRootEntry = null;
   currentThreadStatusMessage = "";
+  resetThreadReplyEdit();
   threadRepliesUnsubscribe?.();
   threadRepliesUnsubscribe = null;
   currentThreadRepliesKey = "";
@@ -7959,6 +8485,22 @@ function getMediaItemLikeDocRef(context, userUid) {
 
 function getActivityDocRef(userId, activityId) {
   return doc(db, runtimeConfig.collections.users, userId, "activity", activityId);
+}
+
+function getThreadReplyDocRef(context) {
+  if (!db || !context?.threadOwnerUid || !context?.activityId || !context?.replyId) {
+    return null;
+  }
+
+  return doc(
+    db,
+    runtimeConfig.collections.users,
+    context.threadOwnerUid,
+    "activity",
+    context.activityId,
+    "replies",
+    context.replyId
+  );
 }
 
 function getSocialLikeDocRef(context, userUid) {
@@ -8377,8 +8919,8 @@ function getSocialMenuItemButtonClass(tone = "default") {
 
 function getSocialLikeButtonClass(liked = false) {
   return liked
-    ? "inline-flex border border-sky-200/45 bg-sky-100/[0.08] px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.54rem] uppercase tracking-[0.16em] text-sky-50 transition hover:border-sky-100/65 hover:bg-sky-100/[0.14] disabled:cursor-not-allowed disabled:opacity-45"
-    : getSocialActionButtonClass();
+    ? "inline-flex border border-sky-200/45 bg-sky-100/[0.08] px-2 py-0.75 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.14em] text-sky-50 transition hover:border-sky-100/65 hover:bg-sky-100/[0.14] disabled:cursor-not-allowed disabled:opacity-45"
+    : "inline-flex border border-white/10 px-2 py-0.75 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.14em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45";
 }
 
 function renderSocialMetricBadge(count, singularLabel, tone = "default") {
@@ -8489,14 +9031,14 @@ function renderSocialActorLink(label, routeId, className) {
   return `<a href="${escapeHtml(profileHref)}" class="${className}">${escapeHtml(displayLabel)}</a>`;
 }
 
-function renderSocialBody(body) {
+function renderSocialEntryBody(body) {
   const normalizedBody = normalizeSocialBody(body);
 
   if (!normalizedBody) {
     return "";
   }
 
-  return `<p class="mt-3 whitespace-pre-wrap break-words text-sm leading-6 tracking-[0.04em] text-stone-100/88">${escapeHtml(normalizedBody)}</p>`;
+  return `<p class="mt-3 whitespace-pre-wrap break-words font-['Arial_Narrow','Helvetica_Neue',Arial,sans-serif] text-[0.96rem] font-semibold leading-5 tracking-[0.03em] text-stone-100/88">${escapeHtml(normalizedBody)}</p>`;
 }
 
 function renderSocialAttachment(entry) {
@@ -8767,6 +9309,10 @@ async function handleRoleSelectChange(event) {
 }
 
 function handleTripBrowserClick(event) {
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
+
   const textPreviewTrigger = event.target.closest("[data-action='preview-text']");
 
   if (textPreviewTrigger) {
@@ -8943,6 +9489,10 @@ function handleVideoPreviewClick(trigger) {
 }
 
 function handleTripBrowserChange(event) {
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
+
   const tripCoverInput = event.target.closest("[data-action='trip-cover-upload']");
 
   if (tripCoverInput) {
@@ -9607,6 +10157,10 @@ async function handleItemDeleteClick(trigger) {
 }
 
 function handleProfileActionClick(event) {
+  if (!ensureAuthenticatedGoogleSession()) {
+    return;
+  }
+
   const trigger = event.target.closest("[data-action='delete-profile']");
 
   if (trigger) {
@@ -9648,6 +10202,10 @@ function handleProfileCardKeydown(event) {
     event.metaKey ||
     (event.key !== "Enter" && event.key !== " ")
   ) {
+    return;
+  }
+
+  if (!ensureAuthenticatedGoogleSession()) {
     return;
   }
 
@@ -9762,6 +10320,12 @@ async function handleFriendDisplayNameEditClick(trigger) {
 function renderAll() {
   recentMediaViews = pruneRecentMediaViews(recentMediaViews);
   syncResponsivePanels();
+
+  if (!ensureAuthenticatedGoogleSession()) {
+    syncScrollBannerVisibility();
+    return;
+  }
+
   renderFeaturedMessage();
   renderFeaturedClip();
   renderAuth();
@@ -9790,23 +10354,30 @@ function renderAuth() {
   const hasArchiveAccess = canUploadMedia();
   syncAdminPanelsToggle();
   syncMobileMenuToggleContent();
+  const routeToggleLabel = shouldRouteToggleToArchive()
+    ? STRINGS.auth.archive
+    : STRINGS.auth.profile;
 
   if (desktopRouteToggleLink) {
-    desktopRouteToggleLink.textContent =
-      isProfileRoute() || isMembersRoute() || isFeedRoute() || isLegalRoute()
-        ? STRINGS.auth.archive
-        : STRINGS.auth.profile;
+    desktopRouteToggleLink.textContent = routeToggleLabel;
   }
 
   if (bannerRouteToggleLink) {
-    bannerRouteToggleLink.textContent =
-      isProfileRoute() || isMembersRoute() || isFeedRoute() || isLegalRoute()
-        ? STRINGS.auth.archive
-        : STRINGS.auth.profile;
+    bannerRouteToggleLink.textContent = routeToggleLabel;
+  }
+
+  if (mobileMenuArchiveButton) {
+    mobileMenuArchiveButton.textContent = STRINGS.auth.archive;
+  }
+
+  if (mobileMenuProfileButton) {
+    mobileMenuProfileButton.textContent = STRINGS.auth.profile;
   }
 
   setElementVisible(desktopRouteToggleLink, hasArchiveAccess, "inline-flex");
+  setElementVisible(desktopActivityButton, hasArchiveAccess, "inline-flex");
   setElementVisible(bannerRouteToggleLink, hasArchiveAccess, "inline-flex");
+  setElementVisible(bannerActivityButton, hasArchiveAccess, "inline-flex");
 
   if (!runtimeConfig) {
     authStatus.textContent = STRINGS.auth.civilianView;
@@ -10329,54 +10900,36 @@ function renderFeedEntry(entry, scope = "all") {
 }
 
 function renderRootFeedEntry(entry, scope = "all") {
-  const actorMarkup = renderSocialActorLink(
-    entry.actorLabel,
-    entry.actorRouteId,
-    "text-stone-100 transition hover:text-white hover:underline"
-  );
-  const controlsMarkup = entry.type === "media-comment"
-    ? renderSocialCommentControls(entry)
-    : renderWallPostControls(entry);
-  const bodyMarkup = entry.type === "media-comment" && isEditingSocialComment(entry)
-    ? renderSocialCommentEditForm(entry)
-    : entry.type === "wall-post" && isEditingWallPost(entry)
-      ? renderWallPostEditForm(entry)
-      : `${renderSocialBody(entry.body)}${renderSocialAttachment(entry)}`;
   const sourceCardMarkup = entry.type === "media-comment"
     ? renderFeedMediaSourceCard(entry)
     : "";
-  const threadButtonMarkup = entry.type === "wall-post" ? renderThreadOpenButton(entry) : "";
+  const wallTargetLinkMarkup = entry.type === "wall-post" ? renderWallTargetLink(entry) : "";
   const interactionMarkup = renderSocialInteractionBar(entry);
-  const articleAttrs = entry.type === "media-comment" ? renderActivitySourceAttributes(entry) : "";
-  const articleActionClass = entry.type === "media-comment"
-    ? "cursor-pointer transition hover:border-white/22 hover:bg-black/32"
-    : "";
+  const articleAttrs = entry.type === "media-comment"
+    ? renderActivitySourceAttributes(entry)
+    : entry.type === "wall-post"
+      ? renderWallPostThreadAttributes(entry)
+      : "";
   const actionLabel = entry.type === "media-comment"
     ? "COMMENTED ON MEDIA"
     : buildActivityActionLabel(entry, getFriendByUid(entry.targetUserUid), entry.targetUserUid === currentUser?.uid);
 
-  return `
-    <article class="border border-white/10 bg-black/24 p-3 sm:p-4 ${articleActionClass}" ${articleAttrs}>
-      <div class="flex items-start gap-3">
-        <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-10 w-10 shrink-0 border border-white/10 bg-black object-cover object-center">
-        <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
-              ${actorMarkup}
-              <span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry.createdAtMs))}</span>
-              ${scope === "yours" ? `<span class="text-sky-100/62">YOUR ACTIVITY</span>` : ""}
-            </div>
-            ${controlsMarkup}
-          </div>
-          <p class="mt-1 break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-300/58">${escapeHtml(actionLabel)}</p>
-          ${bodyMarkup}
-          ${sourceCardMarkup}
-          ${interactionMarkup}
-          ${threadButtonMarkup}
-        </div>
-      </div>
-    </article>
-  `;
+  return renderSocialEntryCard(entry, {
+    articleAttrs,
+    interactive: entry.type === "media-comment" || entry.type === "wall-post",
+    title: entry.type === "media-comment"
+      ? "Open source item and thread"
+      : entry.type === "wall-post"
+        ? "Open wall post thread"
+        : "",
+    controlsMarkup: renderSocialEntryTypeControls(entry),
+    headerMetaMarkup: scope === "yours" ? `<span class="text-sky-100/62">YOUR ACTIVITY</span>` : "",
+    actionLabel,
+    bodyMarkup: renderEditableSocialEntryContent(entry),
+    secondaryMarkup: sourceCardMarkup,
+    interactionMarkup,
+    footerMarkup: wallTargetLinkMarkup,
+  });
 }
 
 function renderUploadFeedEntry(entry) {
@@ -10412,11 +10965,6 @@ function renderUploadFeedEntry(entry) {
 }
 
 function renderReplyFeedEntry(entry) {
-  const actorMarkup = renderSocialActorLink(
-    entry.actorLabel,
-    entry.actorRouteId,
-    "text-stone-100 transition hover:text-white hover:underline"
-  );
   const rootEntry = entry.rootEntry || getRootActivityByThread(entry.threadOwnerUid, entry.activityId);
   const sourceCardMarkup = rootEntry?.type === "media-comment"
     ? renderFeedMediaSourceCard(rootEntry)
@@ -10426,29 +10974,20 @@ function renderReplyFeedEntry(entry) {
     activityId: entry.activityId,
   };
 
-  return `
-    <article class="border border-white/10 border-l-sky-200/20 bg-black/24 p-3 sm:p-4">
-      <div class="flex items-start gap-3">
-        <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-9 w-9 shrink-0 border border-white/10 bg-black object-cover object-center">
-        <div class="min-w-0 flex-1">
-          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em]">
-            ${actorMarkup}
-            <span class="text-stone-400/58">${escapeHtml(formatActivityTime(entry.createdAtMs))}</span>
-          </div>
-          <p class="mt-1 break-words font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-300/58">${escapeHtml(buildReplyFeedContextLabel(rootEntry))}</p>
-          ${renderSocialBody(entry.body)}
-          ${renderSocialAttachment(entry)}
-          ${sourceCardMarkup}
-          ${renderSocialInteractionBar(entry, { includeReplyCount: false })}
-          <div class="mt-3">
-            <button type="button" data-action="open-thread" ${renderThreadActionAttributes(threadContext)} class="${getSocialActionButtonClass()}">
-              Thread
-            </button>
-          </div>
-        </div>
+  return renderSocialEntryCard(entry, {
+    controlsMarkup: renderSocialEntryTypeControls(entry),
+    actionLabel: buildReplyFeedContextLabel(rootEntry),
+    bodyMarkup: renderEditableSocialEntryContent(entry),
+    secondaryMarkup: sourceCardMarkup,
+    interactionMarkup: renderSocialInteractionBar(entry, { includeReplyCount: false }),
+    footerMarkup: `
+      <div class="mt-3">
+        <button type="button" data-action="open-thread" ${renderThreadActionAttributes(threadContext)} class="${getSocialActionButtonClass()}">
+          Thread
+        </button>
       </div>
-    </article>
-  `;
+    `,
+  });
 }
 
 function renderLikeFeedEntry(entry) {
@@ -11002,8 +11541,8 @@ function renderActiveFolderPanel({
   }
 
   const panelShellClass = highlightFolderSelected
-    ? "min-w-0 border border-transparent bg-black/20 p-3 sm:p-4 lg:p-5"
-    : `min-w-0 border ${isProfileView ? "border-white/10 bg-black/28" : "border-white/10 bg-black/20"} p-3 sm:p-4 lg:p-5`;
+    ? "min-w-0 border border-transparent bg-black/20 p-2 sm:p-4 lg:p-5"
+    : `min-w-0 border ${isProfileView ? "border-white/10 bg-black/28" : "border-white/10 bg-black/20"} p-2 sm:p-4 lg:p-5`;
   const panelStyle = highlightFolderSelected ? getHighlightPanelStyle() : "";
   const pathMarkup = highlightFolderSelected
     ? `<span style="${getHighlightPanelTextStyle()}">${escapeHtml(pathLabel)}</span>`
@@ -11045,7 +11584,7 @@ function renderActiveFolderPanel({
 
   return `
     <div class="${responsiveClass} ${panelShellClass}"${panelStyle ? ` style="${panelStyle}"` : ""}>
-      <div class="sticky top-0 z-20 -mx-3 border-b border-white/10 bg-neutral-950/95 px-3 py-2 backdrop-blur lg:hidden">
+      <div class="sticky top-0 z-20 -mx-2 border-b border-white/10 bg-neutral-950/95 px-2 py-2 backdrop-blur sm:-mx-3 sm:px-3 lg:hidden">
         <div class="flex min-w-0 items-center justify-between gap-3">
           <div class="min-w-0 flex-1">
             <p class="break-all font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em] text-stone-400/72 [overflow-wrap:anywhere]">&gt; ${pathMarkup}</p>
@@ -11108,8 +11647,11 @@ function renderActiveFolderPanel({
         </div>
       </div>
 
-      <div class="mt-4 max-w-full overflow-hidden rounded-sm border ${highlightFolderSelected ? "border-amber-300/28" : isProfileView ? "border-white/10" : "border-white/8"} bg-black/18">
-        <div class="relative max-h-[62vh] max-w-full overflow-x-auto overflow-y-auto overscroll-x-contain lg:max-h-[68vh] xl:max-h-[75vh]">
+      <div class="mt-3 max-w-full overflow-hidden rounded-sm border ${highlightFolderSelected ? "border-amber-300/28" : isProfileView ? "border-white/10" : "border-white/8"} bg-black/18 sm:mt-4">
+        <div class="max-h-[68vh] overflow-y-auto px-1 py-1.5 sm:p-3 lg:hidden">
+          ${renderMobileItemCards(items, trip.id, selectedFolder.id, view, { showSourceColumn })}
+        </div>
+        <div class="relative hidden max-h-[62vh] max-w-full overflow-x-auto overflow-y-auto overscroll-x-contain lg:block lg:max-h-[68vh] xl:max-h-[75vh]">
           <table class="w-max ${tableMinWidthClass} border-collapse font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] tracking-[0.06em] text-stone-200/85 sm:min-w-[52rem] sm:text-[0.72rem] sm:tracking-[0.07em] lg:min-w-[58rem] lg:text-[0.74rem] lg:tracking-[0.08em] xl:min-w-full">
             <thead class="bg-white/[0.02] text-stone-300/55 uppercase">
               <tr>
@@ -11429,7 +11971,7 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
       </div>
 
       <div class="${contentClass}">
-        <aside class="${folderRailClass} ${isProfileView ? "border-white/10 bg-black/30" : "border-white/10 bg-black/25"} p-4">
+        <aside class="${folderRailClass} ${isProfileView ? "border-white/10 bg-black/30" : "border-white/10 bg-black/25"} p-2 sm:p-4">
           <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.7rem] uppercase tracking-[0.24em] ${isProfileView ? "text-stone-300/68" : "text-stone-300/65"}">
             Folders
           </p>
@@ -11617,6 +12159,12 @@ function getItemDisplayName(item) {
   return cleanedName || storedName || "untitled";
 }
 
+function getItemTypeLabel(item) {
+  return item.kind === "text"
+    ? STRINGS.items.post
+    : item.extension || simplifyMimeType(item.mimeType) || "FILE";
+}
+
 function renderItemRows(items, tripId, folderId, view = "archive", options = {}) {
   const showSourceColumn = Boolean(options.showSourceColumn);
   const mostRecentViewedKey = getMostRecentVisibleMediaViewKey(items, tripId, folderId);
@@ -11641,10 +12189,7 @@ function renderItemRows(items, tripId, folderId, view = "archive", options = {})
       const certifiedRow = isItemCertified(item);
       const viewedRecently = isMediaItemViewedRecently(item, tripId, folderId);
       const mutedTextClass = viewedRecently ? "text-stone-500/72" : "";
-      const typeLabel =
-        item.kind === "text"
-          ? STRINGS.items.post
-          : item.extension || simplifyMimeType(item.mimeType) || "FILE";
+      const typeLabel = getItemTypeLabel(item);
       const sourceFolderId = resolveItemSourceFolderId(item, folderId);
       const preview = renderItemPreview(item, tripId, folderId, view, certifiedRow);
       const source = renderItemSource(tripId, sourceFolderId, { muted: viewedRecently });
@@ -11689,6 +12234,316 @@ function renderItemRows(items, tripId, folderId, view = "archive", options = {})
       `;
     })
     .join("");
+}
+
+function renderMobileItemCards(items, tripId, folderId, view = "archive", options = {}) {
+  const showSourceColumn = Boolean(options.showSourceColumn);
+  const mostRecentViewedKey = getMostRecentVisibleMediaViewKey(items, tripId, folderId);
+
+  if (items.length === 0) {
+    return `
+      <div class="border border-dashed border-white/10 bg-black/10 px-4 py-8 text-center font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] uppercase tracking-[0.18em] text-stone-300/48">
+        ${STRINGS.items.noObjects}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="-mx-0.5 flex flex-col gap-1 sm:-mx-1">
+      ${items
+        .map((item) =>
+          renderMobileItemCard(item, tripId, folderId, view, {
+            showSourceColumn,
+            mostRecentViewedKey,
+          })
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderMobileItemCard(item, tripId, folderId, view = "archive", options = {}) {
+  const displayName = getItemDisplayName(item);
+  const certified = isItemCertified(item);
+  const showSourceColumn = Boolean(options.showSourceColumn);
+  const mostRecentViewedKey = String(options.mostRecentViewedKey || "");
+  const sourceFolderId = resolveItemSourceFolderId(item, folderId);
+  const viewedRecently = isMediaItemViewedRecently(item, tripId, folderId);
+  const typeLabel = getItemTypeLabel(item);
+  const previewRowSelected = Boolean(
+    currentVideoPreviewContext &&
+      currentVideoPreviewContext.view === view &&
+      currentVideoPreviewContext.tripId === tripId &&
+      currentVideoPreviewContext.folderId === folderId &&
+      currentVideoPreviewContext.itemId === item.id
+  );
+  const sourceLabel = showSourceColumn ? buildItemSourceLabel(tripId, sourceFolderId) : "";
+  const sourceMarkup = sourceLabel
+    ? `<span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.48rem] uppercase tracking-[0.12em] text-stone-500/72">${escapeHtml(
+        sourceLabel
+      )}</span>`
+    : "";
+
+  const authorMarkup = renderItemAuthor(item, { muted: viewedRecently });
+  const sizeLabel = item.kind === "text" ? STRINGS.items.textPost : formatBytes(item.size);
+  const secondaryToneClass = viewedRecently ? "text-stone-500/72" : "text-stone-300/72";
+  const metaLineMarkup = `
+    <div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.5rem] uppercase leading-tight tracking-[0.1em] ${secondaryToneClass}">
+      ${authorMarkup}
+      <span class="text-stone-500/62">/</span>
+      <span>${escapeHtml(typeLabel)}</span>
+      <span class="text-stone-500/62">/</span>
+      <span>${escapeHtml(sizeLabel)}</span>
+    </div>
+  `;
+  const descriptionMarkup =
+    item.kind === "file" && item.description
+      ? `<div class="mt-0.5 line-clamp-1 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.5rem] leading-3 text-stone-400/64">${escapeHtml(item.description)}</div>`
+    : "";
+  const recentViewMarkup =
+    item.kind === "file"
+      ? renderRecentMediaViewMetaWithKey(item, tripId, sourceFolderId, mostRecentViewedKey)
+      : "";
+  const interactionCounts =
+    item.kind === "file"
+      ? getMediaItemInteractionCounts(item, tripId, sourceFolderId)
+      : null;
+  const interactionMarkup = interactionCounts
+    ? `
+      <div class="mt-1 flex flex-wrap gap-1">
+        ${renderSocialMetricBadge(interactionCounts.likeCount, "LIKE", certified ? "highlight" : "default")}
+        ${renderSocialMetricBadge(interactionCounts.commentCount, "COMMENT", certified ? "highlight" : "default")}
+      </div>
+    `
+    : "";
+  const topLabelMarkup = certified
+    ? `<span class="font-['Teko',sans-serif] text-[0.82rem] leading-none tracking-[0.16em]" style="${getHighlightTextStyle()}">${escapeHtml(
+        HIGHLIGHT_FOLDER_LABEL
+      )}</span>`
+    : "";
+  const actionMenuMarkup = renderItemActionMenu(item, tripId, sourceFolderId, {
+    detailsClass: "relative shrink-0",
+    summaryLabel: "Item actions",
+  });
+  const cardClass = [
+    `relative overflow-visible border ${certified ? "border-amber-300/28 bg-[rgba(255,221,138,0.028)]" : "border-white/8 bg-black/10"} px-1.5 py-1.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] tracking-[0.06em] text-stone-200/85 transition hover:bg-white/[0.03]`,
+    previewRowSelected ? "bg-white/[0.04] ring-1 ring-white/12" : "",
+    viewedRecently ? "text-stone-500/72" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return `
+    <article
+      data-preview-row="true"
+      data-view="${escapeHtml(view)}"
+      data-trip-id="${escapeHtml(tripId)}"
+      data-folder-id="${escapeHtml(folderId)}"
+      data-item-id="${escapeHtml(item.id)}"
+      class="${cardClass}"
+      ${certified ? ` style="${getCertifiedRowStyle()}"` : ""}
+    >
+      <div class="flex items-center gap-2">
+        <div class="shrink-0">${renderItemPreview(item, tripId, folderId, view, certified)}</div>
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              ${topLabelMarkup || sourceMarkup ? `<div class="mb-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">${topLabelMarkup}${sourceMarkup}</div>` : ""}
+              ${renderMobileItemTitle(item, displayName, tripId, folderId, view, viewedRecently)}
+              ${metaLineMarkup}
+              ${descriptionMarkup}
+              ${recentViewMarkup}
+              ${interactionMarkup}
+            </div>
+            ${actionMenuMarkup}
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderMobileItemTitle(
+  item,
+  displayName,
+  tripId,
+  folderId,
+  view = "archive",
+  viewedRecently = false
+) {
+  const toneClass = viewedRecently
+    ? "text-stone-500/72 hover:text-stone-300"
+    : "text-stone-100 hover:text-white";
+  const titleClass = `line-clamp-2 break-all font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] font-normal leading-[1.08] tracking-[0.04em] [overflow-wrap:anywhere] transition ${toneClass}`;
+
+  if (item.kind === "text") {
+    return `
+      <button
+        type="button"
+        data-action="preview-text"
+        data-view="${escapeHtml(view)}"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="block w-full bg-transparent p-0 text-left"
+        aria-label="Preview ${escapeHtml(displayName)}"
+      >
+        <span class="${titleClass}">${escapeHtml(displayName)}</span>
+      </button>
+    `;
+  }
+
+  if (isPreviewableMediaItem(item)) {
+    return `
+      <button
+        type="button"
+        data-action="preview-media"
+        data-view="${escapeHtml(view)}"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="block w-full bg-transparent p-0 text-left"
+        aria-label="Preview ${escapeHtml(displayName)}"
+      >
+        <span class="${titleClass}">${escapeHtml(displayName)}</span>
+      </button>
+    `;
+  }
+
+  return `<a class="block ${titleClass}" href="${escapeHtml(item.downloadURL)}" target="_blank" rel="noreferrer">${escapeHtml(
+    displayName
+  )}</a>`;
+}
+
+function renderMobileItemPreview(item, tripId, folderId, view = "archive", certified = false) {
+  const displayName = getItemDisplayName(item);
+  const previewStyle = certified ? getHighlightButtonStyle() : "";
+  const wrapperClass =
+    "group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden border border-black/14 bg-black/68 p-[3px] shadow-[0_10px_22px_rgba(0,0,0,0.24)] transition hover:opacity-95";
+  const fallbackPanelClass =
+    "relative flex h-full w-full items-center justify-center overflow-hidden bg-[linear-gradient(135deg,#c00000_0%,#8e0000_100%)]";
+  const mediaClass = "block h-full w-full object-cover";
+  const playOverlay = `
+    <span class="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <span class="flex h-8 w-8 items-center justify-center rounded-full border border-white/28 bg-black/62 text-[0.62rem] text-white/92">
+        &#9654;
+      </span>
+    </span>
+  `;
+
+  if (item.kind === "text") {
+    return `
+      <button
+        type="button"
+        data-action="preview-text"
+        data-view="${escapeHtml(view)}"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="${wrapperClass}"
+        ${previewStyle ? `style="${previewStyle}"` : ""}
+        aria-label="Preview ${escapeHtml(displayName)}"
+      >
+        <span class="${fallbackPanelClass}">
+          <span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.72rem] uppercase tracking-[0.18em] text-white/92">TXT</span>
+        </span>
+      </button>
+    `;
+  }
+
+  if (isImagePreviewItem(item)) {
+    return `
+      <button
+        type="button"
+        data-action="preview-media"
+        data-view="${escapeHtml(view)}"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="${wrapperClass}"
+        ${previewStyle ? `style="${previewStyle}"` : ""}
+        aria-label="Preview ${escapeHtml(displayName)}"
+      >
+        <img src="${escapeHtml(item.downloadURL)}" alt="${escapeHtml(displayName)}" class="${mediaClass}">
+      </button>
+    `;
+  }
+
+  if (isVideoPreviewItem(item)) {
+    if (item.posterDownloadURL) {
+      return `
+        <button
+          type="button"
+          data-action="preview-media"
+          data-view="${escapeHtml(view)}"
+          data-trip-id="${escapeHtml(tripId)}"
+          data-folder-id="${escapeHtml(folderId)}"
+          data-item-id="${escapeHtml(item.id)}"
+          class="${wrapperClass}"
+          ${previewStyle ? `style="${previewStyle}"` : ""}
+          aria-label="Preview ${escapeHtml(displayName)}"
+        >
+          <span class="relative block h-full w-full overflow-hidden">
+            <img src="${escapeHtml(item.posterDownloadURL)}" alt="${escapeHtml(displayName)}" class="${mediaClass}">
+            ${playOverlay}
+          </span>
+        </button>
+      `;
+    }
+
+    return `
+      <button
+        type="button"
+        data-action="preview-media"
+        data-view="${escapeHtml(view)}"
+        data-trip-id="${escapeHtml(tripId)}"
+        data-folder-id="${escapeHtml(folderId)}"
+        data-item-id="${escapeHtml(item.id)}"
+        class="${wrapperClass}"
+        ${previewStyle ? `style="${previewStyle}"` : ""}
+        aria-label="Preview ${escapeHtml(displayName)}"
+      >
+        <span class="${fallbackPanelClass}">
+          ${playOverlay}
+        </span>
+      </button>
+    `;
+  }
+
+  return `
+    <a
+      class="${wrapperClass}"
+      ${previewStyle ? `style="${previewStyle}"` : ""}
+      href="${escapeHtml(item.downloadURL)}"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Download ${escapeHtml(displayName)}"
+    >
+      <span class="${fallbackPanelClass}">
+        <span class="px-2 text-center font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] uppercase tracking-[0.16em] text-white/92">${escapeHtml(
+          getItemTypeLabel(item)
+        )}</span>
+      </span>
+    </a>
+  `;
+}
+
+function renderMobileItemAuthorMarkup(item, options = {}) {
+  const authorLabel = resolveItemAuthorLabel(item);
+  const authorRouteId = getItemAuthorRouteId(item);
+  const muted = Boolean(options?.muted);
+
+  if (!authorLabel) {
+    return `<span class="${muted ? "text-black/42" : "text-white/76"}">${escapeHtml(STRINGS.items.emptyName)}</span>`;
+  }
+
+  if (!authorRouteId || isItemBrandAuthored(item)) {
+    return `<span class="${muted ? "text-black/48" : "text-white/94"}">${escapeHtml(authorLabel)}</span>`;
+  }
+
+  return `<a class="${muted ? "text-black/50 hover:text-black/68" : "text-white/94 hover:text-white"} underline-offset-4 transition hover:underline" href="${escapeHtml(
+    buildProfilePath(authorRouteId)
+  )}">${escapeHtml(authorLabel)}</a>`;
 }
 
 function renderItemNameMarkup(item, displayName, tripId, folderId, view = "archive") {
@@ -11746,39 +12601,22 @@ function renderItemCertified(item, options = {}) {
   return `<span class="font-['Teko',sans-serif] text-[1.15rem] leading-none tracking-[0.18em]" style="${getHighlightTextStyle()}">${escapeHtml(HIGHLIGHT_FOLDER_LABEL)}</span>`;
 }
 
-function renderItemMeta(item, tripId, folderId, options = {}) {
+function renderItemActionMenu(item, tripId, folderId, options = {}) {
   const adminContext = isAdminViewEnabled();
   const neutralMenuButtonClass = getSocialMenuItemButtonClass();
   const accentDeleteButtonClass = getSocialMenuItemButtonClass("delete");
   const certifyMenuButtonClass = "block w-full border border-amber-200/35 bg-amber-100/[0.07] px-2 py-1.5 text-left font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.16em] text-amber-50 transition hover:border-amber-100/55 hover:bg-amber-100/[0.12] disabled:cursor-not-allowed disabled:opacity-45";
   const uncertifyMenuButtonClass = "block w-full border border-sky-300/32 bg-sky-100/[0.03] px-2 py-1.5 text-left font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.16em] text-sky-100 transition hover:border-sky-200/55 hover:bg-sky-100/[0.08] disabled:cursor-not-allowed disabled:opacity-45";
   const featuredMenuButtonClass = "block w-full border border-sky-300/24 bg-sky-100/[0.03] px-2 py-1.5 text-left font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.16em] text-sky-100 transition hover:border-sky-200/55 hover:bg-sky-100/[0.08] disabled:cursor-not-allowed disabled:opacity-45";
-  const summary =
-    item.kind === "text"
-      ? STRINGS.items.textPost
-      : `${formatBytes(item.size)} / ${escapeHtml(getItemDisplayName(item))}`;
-  const muted = Boolean(options?.muted);
-  const descriptionMarkup =
-    item.kind === "file" && item.description
-      ? `<div class="mt-1.5 normal-case text-[0.58rem] leading-4 tracking-[0.04em] ${muted ? "text-stone-500/72" : "text-stone-300/72"}">${escapeHtml(
-          item.description
-        )}</div>`
-      : "";
-  const interactionCounts = item.kind === "file"
-    ? getMediaItemInteractionCounts(item, tripId, folderId)
-    : null;
-  const interactionMarkup = interactionCounts
-    ? `
-      <div class="mt-1.5 flex flex-wrap gap-1.5">
-        ${renderSocialMetricBadge(interactionCounts.likeCount, "LIKE")}
-        ${renderSocialMetricBadge(interactionCounts.commentCount, "COMMENT")}
-      </div>
-    `
-    : "";
-  const mostRecentViewedKey = String(options?.mostRecentViewedKey || "");
-  const recentViewMarkup = item.kind === "file"
-    ? renderRecentMediaViewMetaWithKey(item, tripId, folderId, mostRecentViewedKey)
-    : "";
+  const detailsClass = options.detailsClass || "relative inline-block";
+  const summaryClass =
+    options.summaryClass ||
+    "flex h-7 w-7 cursor-pointer list-none items-center justify-center border border-white/10 bg-black/40 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none tracking-[0.08em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08] [&::-webkit-details-marker]:hidden";
+  const menuClass =
+    options.menuClass ||
+    "absolute right-0 top-[calc(100%+0.35rem)] z-30 w-44 border border-white/12 bg-neutral-950/98 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.45)]";
+  const summaryLabel = options.summaryLabel || "Clip actions";
+  const summaryText = options.summaryText || "...";
   const actionButtons = [];
 
   if (adminContext && item.kind === "file") {
@@ -11856,21 +12694,51 @@ function renderItemMeta(item, tripId, folderId, options = {}) {
     `);
   }
 
-  const actionsMarkup =
-    actionButtons.length > 0
-      ? `
-        <div class="mt-2">
-          <details class="relative inline-block">
-            <summary class="flex h-7 w-7 cursor-pointer list-none items-center justify-center border border-white/10 bg-black/40 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.68rem] leading-none tracking-[0.08em] text-stone-200 transition hover:border-white/30 hover:bg-white/[0.08] [&::-webkit-details-marker]:hidden" aria-label="Clip actions">
-              ...
-            </summary>
-            <div class="absolute right-0 top-[calc(100%+0.35rem)] z-30 w-44 border border-white/12 bg-neutral-950/98 p-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.45)]">
-              ${actionButtons.join("")}
-            </div>
-          </details>
-        </div>
-      `
+  if (actionButtons.length === 0) {
+    return "";
+  }
+
+  return `
+    <details class="${detailsClass}">
+      <summary class="${summaryClass}" aria-label="${escapeHtml(summaryLabel)}">
+        ${escapeHtml(summaryText)}
+      </summary>
+      <div class="${menuClass}">
+        ${actionButtons.join("")}
+      </div>
+    </details>
+  `;
+}
+
+function renderItemMeta(item, tripId, folderId, options = {}) {
+  const summary =
+    item.kind === "text"
+      ? STRINGS.items.textPost
+      : `${formatBytes(item.size)} / ${escapeHtml(getItemDisplayName(item))}`;
+  const muted = Boolean(options?.muted);
+  const descriptionMarkup =
+    item.kind === "file" && item.description
+      ? `<div class="mt-1.5 normal-case text-[0.58rem] leading-4 tracking-[0.04em] ${muted ? "text-stone-500/72" : "text-stone-300/72"}">${escapeHtml(
+          item.description
+        )}</div>`
       : "";
+  const interactionCounts = item.kind === "file"
+    ? getMediaItemInteractionCounts(item, tripId, folderId)
+    : null;
+  const interactionMarkup = interactionCounts
+    ? `
+      <div class="mt-1.5 flex flex-wrap gap-1.5">
+        ${renderSocialMetricBadge(interactionCounts.likeCount, "LIKE")}
+        ${renderSocialMetricBadge(interactionCounts.commentCount, "COMMENT")}
+      </div>
+    `
+    : "";
+  const mostRecentViewedKey = String(options?.mostRecentViewedKey || "");
+  const recentViewMarkup = item.kind === "file"
+    ? renderRecentMediaViewMetaWithKey(item, tripId, folderId, mostRecentViewedKey)
+    : "";
+  const actionMenuMarkup = renderItemActionMenu(item, tripId, folderId);
+  const actionsMarkup = actionMenuMarkup ? `<div class="mt-2">${actionMenuMarkup}</div>` : "";
 
   const summaryMarkup = muted
     ? `<span class="text-stone-500/72">${summary}</span>`
@@ -12161,13 +13029,20 @@ function renderFriendsPanel() {
 
 function renderMobileProfileMenu(visibleMembers = getVisibleMembers(), onlineMembers = getOnlineMembers(visibleMembers)) {
   const signedIn = Boolean(currentUser?.uid);
-  const actionButtons = [
+  const hasArchiveAccess = canUploadMedia();
+  const routeButtons = [
+    mobileMenuArchiveButton,
     mobileMenuProfileButton,
     mobileMenuActivityButton,
     mobileMenuMembersButton,
+  ];
+  const actionButtons = [
     mobileMenuSignOutButton,
   ];
 
+  routeButtons.forEach((button) => {
+    setElementVisible(button, signedIn && hasArchiveAccess, "block");
+  });
   actionButtons.forEach((button) => {
     setElementVisible(button, signedIn, "block");
   });
@@ -12179,6 +13054,47 @@ function renderMobileProfileMenu(visibleMembers = getVisibleMembers(), onlineMem
       : "";
     mobileMenuMemberSummary.classList.toggle("hidden", !signedIn);
   }
+
+  syncMobileMenuRouteButtonStates();
+}
+
+function syncMobileMenuRouteButtonStates() {
+  syncMobileMenuRouteButtonState(
+    mobileMenuArchiveButton,
+    currentRoute?.kind === ROUTE_ARCHIVE
+  );
+  syncMobileMenuRouteButtonState(
+    mobileMenuProfileButton,
+    isProfileRoute()
+  );
+  syncMobileMenuRouteButtonState(
+    mobileMenuActivityButton,
+    isFeedRoute()
+  );
+  syncMobileMenuRouteButtonState(
+    mobileMenuMembersButton,
+    isMembersRoute()
+  );
+}
+
+function syncMobileMenuRouteButtonState(button, active = false) {
+  if (!button) {
+    return;
+  }
+
+  MOBILE_MENU_ROUTE_BUTTON_ACTIVE_CLASSES.forEach((className) => {
+    button.classList.toggle(className, Boolean(active));
+  });
+  MOBILE_MENU_ROUTE_BUTTON_INACTIVE_CLASSES.forEach((className) => {
+    button.classList.toggle(className, !active);
+  });
+
+  if (active) {
+    button.setAttribute("aria-current", "page");
+    return;
+  }
+
+  button.removeAttribute("aria-current");
 }
 
 function syncMobileMenuToggleContent() {
