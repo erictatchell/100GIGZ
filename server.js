@@ -175,7 +175,8 @@ async function handleVaultVerify(request, response) {
 }
 
 async function serveStaticFile(request, pathname, response) {
-  let targetPath = resolveStaticPath(pathname);
+  let targetPath =
+    pathname === "/404" ? resolveStaticPath("/404.html") : resolveStaticPath(pathname);
 
   if (!targetPath) {
     return sendText(response, 403, "Forbidden");

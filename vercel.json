@@ -11,6 +11,10 @@
       "use": "@vercel/static"
     },
     {
+      "src": "404.html",
+      "use": "@vercel/static"
+    },
+    {
       "src": "static/**",
       "use": "@vercel/static"
     },
@@ -27,6 +31,10 @@
     {
       "source": "/api/((?!.*\\.js$).*)",
       "destination": "/api/$1.js"
+    },
+    {
+      "source": "/404",
+      "destination": "/404.html"
     },
     {
       "source": "/((?!api/|static/|assets/).*)",
