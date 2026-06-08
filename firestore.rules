@@ -251,7 +251,31 @@ service cloud.firestore {
         && likeId == request.auth.uid
         && request.resource.data.keys().hasOnly(['createdAt', 'createdAtMs'])
         && request.resource.data.createdAt is timestamp
-        && request.resource.data.createdAtMs is number;
+        && (
+          !request.resource.data.keys().hasAny(['createdAtMs']) ||
+          request.resource.data.createdAtMs is number
+        );
+    }
+
+    function hasStoredLikeCount() {
+      return resource.data.keys().hasAny(['likeCount'])
+        && resource.data.likeCount is number;
+    }
+
+    function currentLikeCount() {
+      return hasStoredLikeCount() ? resource.data.likeCount : 0;
+    }
+
+    function isValidLikeCountUpdate() {
+      return isMember()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+        && request.resource.data.likeCount is number
+        && request.resource.data.likeCount >= 0
+        && (
+          request.resource.data.likeCount == currentLikeCount() + 1 ||
+          request.resource.data.likeCount == currentLikeCount() - 1 ||
+          request.resource.data.likeCount == currentLikeCount()
+        );
     }
 
     function hasValidActivityMediaFields() {
@@ -414,7 +438,9 @@ service cloud.firestore {
       match /activity/{activityId} {
         allow read: if true;
         allow create: if isValidActivityCreate(userId);
-        allow update: if isValidWallPostUpdate() || isValidActivityMediaCommentUpdate();
+        allow update: if isValidWallPostUpdate()
+          || isValidActivityMediaCommentUpdate()
+          || isValidLikeCountUpdate();
         allow delete: if isAdmin()
           || (isMember() && resource.data.actorUid == request.auth.uid)
           || isWallPostOwner();
@@ -422,7 +448,7 @@ service cloud.firestore {
         match /replies/{replyId} {
           allow read: if true;
           allow create: if isValidThreadReplyCreate(userId, activityId);
-          allow update: if isValidThreadReplyUpdate();
+          allow update: if isValidThreadReplyUpdate() || isValidLikeCountUpdate();
           allow delete: if isAdmin()
             || (isMember() && resource.data.actorUid == request.auth.uid)
             || (isMember() && userId == request.auth.uid)
@@ -460,7 +486,10 @@ service cloud.firestore {
         match /items/{itemId} {
           allow read: if request.auth == null || isMember();
           allow create: if isAdmin() || isValidMemberMediaCreate() || isValidMemberTextCreate();
-          allow update: if isAdmin() || isValidMemberTextUpdate() || isValidMemberFileUpdate();
+          allow update: if isAdmin()
+            || isValidMemberTextUpdate()
+            || isValidMemberFileUpdate()
+            || isValidLikeCountUpdate();
           allow delete: if isAdmin() || isItemOwner();
 
           match /likes/{likeId} {
@@ -472,7 +501,7 @@ service cloud.firestore {
           match /comments/{commentId} {
             allow read: if request.auth == null || isMember();
             allow create: if isValidMediaCommentCreate(tripId, folderId, itemId);
-            allow update: if isValidMediaCommentUpdate();
+            allow update: if isValidMediaCommentUpdate() || isValidLikeCountUpdate();
             allow delete: if isAdmin()
               || (isMember() && resource.data.authorUid == request.auth.uid);
 

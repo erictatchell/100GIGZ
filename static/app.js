@@ -8,6 +8,8 @@ import {
   signOut as firebaseSignOut,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
+  arrayRemove,
+  arrayUnion,
   collectionGroup,
   collection,
   deleteField,
@@ -19,6 +21,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   writeBatch,
@@ -172,10 +175,11 @@ const profileActivitySubmit = document.getElementById("profile-activity-submit")
 const profileActivityStatus = document.getElementById("profile-activity-status");
 const profileActivityList = document.getElementById("profile-activity-list");
 const feedPageStatus = document.getElementById("feed-page-status");
+const feedScopeAllInput = document.getElementById("feed-scope-all");
+const feedScopeYourInput = document.getElementById("feed-scope-yours");
 const feedAllCount = document.getElementById("feed-all-count");
 const feedYourCount = document.getElementById("feed-your-count");
 const feedAllList = document.getElementById("feed-all-list");
-const feedYourList = document.getElementById("feed-your-list");
 const membersPageStatus = document.getElementById("members-page-status");
 const membersPageCount = document.getElementById("members-page-count");
 const membersPageOnline = document.getElementById("members-page-online");
@@ -316,6 +320,8 @@ const ROUTE_MEMBERS = "members";
 const ROUTE_PRIVACY = "privacy";
 const ROUTE_TOS = "tos";
 const ROUTE_UNKNOWN = "unknown";
+const FEED_SCOPE_ALL = "all";
+const FEED_SCOPE_YOURS = "yours";
 const AUTHOR_ALIAS_BRAND = "brand";
 const AUTHOR_ALIAS_SELF = "self";
 const HIGHLIGHT_FOLDER_LABEL = String(STRINGS.brand || "100GIGZ").trim() || "100GIGZ";
@@ -394,12 +400,17 @@ let currentProfileActivityUid = "";
 let profileActivityUnsubscribe = null;
 let profileActivityByUser = new Map();
 let profileSelectedFolders = new Map();
-let feedActivityUnsubscribe = null;
-let feedItemUnsubscribe = null;
+let feedActivityUnsubscribers = new Map();
+let feedActivityEntriesByUser = new Map();
+let feedReplyUnsubscribers = new Map();
+let feedRepliesByThreadKey = new Map();
+let feedLikeUnsubscribers = new Map();
+let feedLikeEventsByTargetKey = new Map();
 let feedRootActivities = [];
 let feedUploadItems = [];
 let feedReplyEntries = [];
 let feedLikeEvents = [];
+let feedActivityScope = FEED_SCOPE_ALL;
 let mediaCommentAggregateUnsubscribe = null;
 let threadReplyAggregateUnsubscribe = null;
 let likeAggregateUnsubscribe = null;
@@ -1257,6 +1268,7 @@ function initializeAuthListener() {
       window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
       try {
         currentUserProfile = await syncUserRecord(user);
+        syncFeedActivitySubscriptions();
         startPresenceHeartbeat();
         await syncDefaultTripsIfNeeded();
       } catch (error) {
@@ -1275,6 +1287,7 @@ function initializeAuthListener() {
       resetWallPostEdit();
       syncVideoPreviewComments(getCurrentVideoPreviewState());
       syncProfileActivitySubscription("");
+      stopFeedStreams();
       adminPanelsVisible = false;
       setMobileMenuOpen(false);
       if (currentRoute?.kind === ROUTE_PROFILE_SELF || isFeedRoute()) {
@@ -1373,10 +1386,10 @@ function setupForms() {
   profileRouteInput?.addEventListener("input", handleProfileRouteInput);
   profileActivityList?.addEventListener("click", handleSocialCommentActionClick);
   profileActivityList?.addEventListener("submit", handleSocialCommentEditSubmit);
+  feedScopeAllInput?.addEventListener("change", handleFeedScopeChange);
+  feedScopeYourInput?.addEventListener("change", handleFeedScopeChange);
   feedAllList?.addEventListener("click", handleSocialCommentActionClick);
   feedAllList?.addEventListener("submit", handleSocialCommentEditSubmit);
-  feedYourList?.addEventListener("click", handleSocialCommentActionClick);
-  feedYourList?.addEventListener("submit", handleSocialCommentEditSubmit);
   profileTripList?.addEventListener("click", handleProfileTripBrowserClick);
   profileTripList?.addEventListener("change", handleProfileTripBrowserChange);
   friendsDesktopList?.addEventListener("change", handleRoleSelectChange);
@@ -2710,7 +2723,7 @@ async function handleProfileActivitySubmit(event) {
 async function handleMediaItemLikeButtonClick() {
   const context = buildMediaItemLikeContext(getCurrentVideoPreviewState());
 
-  if (!context?.likeKey || !db || !currentUser?.uid) {
+  if (!context?.targetKey || !db || !currentUser?.uid) {
     requestGoogleSignIn("SIGN IN TO LIKE.");
     setVideoPreviewCommentStatus("SIGN IN TO LIKE.");
     return;
@@ -2719,8 +2732,8 @@ async function handleMediaItemLikeButtonClick() {
   videoPreviewLikeButton?.toggleAttribute("disabled", true);
 
   try {
-    const nextLiked = await toggleLikeAtRef(getMediaItemLikeDocRef(context, currentUser.uid));
-    applyLocalLikeState(context.likeKey, currentUser.uid, nextLiked);
+    const nextLiked = await toggleLikeForContext(context, currentUser.uid);
+    applyLocalLikeState(context.targetKey, currentUser.uid, nextLiked);
     scheduleInteractionRefresh();
   } catch (error) {
     setVideoPreviewCommentStatus(getErrorMessage(error, "Could not update like.").toUpperCase());
@@ -2841,16 +2854,14 @@ async function handleSocialLikeToggleClick(trigger) {
     return;
   }
 
-  const likeRef = getSocialLikeDocRef(context, currentUser.uid);
-
-  if (!likeRef) {
+  if (!getSocialLikeDocRef(context, currentUser.uid)) {
     return;
   }
 
   trigger.disabled = true;
 
   try {
-    const nextLiked = await toggleLikeAtRef(likeRef);
+    const nextLiked = await toggleLikeForContext(context, currentUser.uid);
     applyLocalLikeState(context.targetKey, currentUser.uid, nextLiked);
     scheduleInteractionRefresh();
   } catch (error) {
@@ -3567,6 +3578,7 @@ function subscribeToFriends() {
       }
 
       void backfillVisibleProfiles(snapshot.docs);
+      syncFeedActivitySubscriptions();
       renderAll();
     },
     (error) => {
@@ -3593,61 +3605,423 @@ function subscribeToFeedStreams() {
     return;
   }
 
-  subscribeToFeedRootActivities();
-  subscribeToFeedUploads();
+  syncFeedActivitySubscriptions();
 }
 
-function subscribeToFeedRootActivities() {
-  feedActivityUnsubscribe?.();
+function syncFeedActivitySubscriptions() {
+  if (!db || !runtimeConfig?.collections?.users || !currentUser?.uid) {
+    stopFeedStreams();
+    return;
+  }
 
-  feedActivityUnsubscribe = onSnapshot(
-    collectionGroup(db, "activity"),
-    (snapshot) => {
-      feedRootActivities = snapshot.docs
-        .map((activityDoc) => {
-          const pathSegments = activityDoc.ref.path.split("/");
-          const activityOwnerUid = String(pathSegments[1] || "");
-          return normalizeActivityEntry({
-            id: activityDoc.id,
-            activityOwnerUid,
-            ...activityDoc.data(),
-          });
-        })
-        .sort(compareFeedEntriesByTime);
-      renderFeedPageIfVisible();
-    },
-    (error) => {
-      console.warn("Could not subscribe to feed activity.", error);
-      setFeedStatus(getFriendlyFirestoreMessage(error).toUpperCase());
-    }
+  const desiredUids = new Set(
+    getVisibleMembers()
+      .map((friend) => String(friend.uid || friend.id || ""))
+      .filter(Boolean)
   );
+  desiredUids.add(currentUser.uid);
+
+  feedActivityUnsubscribers.forEach((unsubscribe, uid) => {
+    if (!desiredUids.has(uid)) {
+      unsubscribe();
+      feedActivityUnsubscribers.delete(uid);
+      feedActivityEntriesByUser.delete(uid);
+    }
+  });
+
+  desiredUids.forEach((uid) => {
+    if (feedActivityUnsubscribers.has(uid)) {
+      return;
+    }
+
+    const activityQuery = query(
+      collection(db, runtimeConfig.collections.users, uid, "activity"),
+      orderBy("createdAtMs", "desc")
+    );
+    const unsubscribe = onSnapshot(
+      activityQuery,
+      (snapshot) => {
+        feedActivityEntriesByUser.set(
+          uid,
+          snapshot.docs.map((activityDoc) =>
+            normalizeActivityEntry({
+              id: activityDoc.id,
+              activityOwnerUid: uid,
+              ...activityDoc.data(),
+            })
+          )
+        );
+        rebuildFeedRootActivitiesFromUserStreams();
+        syncFeedReplySubscriptions();
+        renderFeedPageIfVisible();
+      },
+      (error) => {
+        console.warn("Could not subscribe to feed activity.", error);
+        setFeedStatus(getFriendlyFirestoreMessage(error).toUpperCase());
+      }
+    );
+
+    feedActivityUnsubscribers.set(uid, unsubscribe);
+  });
+
+  rebuildFeedRootActivitiesFromUserStreams();
+  syncFeedReplySubscriptions();
 }
 
-function subscribeToFeedUploads() {
-  feedItemUnsubscribe?.();
+function rebuildFeedRootActivitiesFromUserStreams() {
+  feedRootActivities = [...feedActivityEntriesByUser.values()]
+    .flat()
+    .sort(compareFeedEntriesByTime);
+}
 
-  feedItemUnsubscribe = onSnapshot(
-    collectionGroup(db, "items"),
-    (snapshot) => {
-      feedUploadItems = snapshot.docs
-        .map((itemDoc) => {
-          const pathSegments = itemDoc.ref.path.split("/");
-          return normalizeItem({
-            id: itemDoc.id,
-            tripId: String(pathSegments[1] || ""),
-            folderId: String(pathSegments[3] || ""),
-            ...itemDoc.data(),
-          });
-        })
-        .filter((item) => item.kind === "file")
-        .sort(compareFeedEntriesByTime);
-      renderFeedPageIfVisible();
-    },
-    (error) => {
-      console.warn("Could not subscribe to feed uploads.", error);
-      setFeedStatus(getFriendlyFirestoreMessage(error).toUpperCase());
+function syncFeedReplySubscriptions() {
+  if (!db || !runtimeConfig?.collections?.users || !currentUser?.uid) {
+    return;
+  }
+
+  const desiredThreads = new Map();
+
+  getUniqueFeedRootActivities()
+    .slice(0, 160)
+    .forEach((entry) => {
+      const threadOwnerUid = getThreadOwnerUid(entry);
+      const activityId = String(entry?.id || "");
+      const threadKey = buildThreadKey(threadOwnerUid, activityId);
+
+      if (threadKey) {
+        desiredThreads.set(threadKey, { threadOwnerUid, activityId });
+      }
+    });
+
+  feedReplyUnsubscribers.forEach((unsubscribe, threadKey) => {
+    if (!desiredThreads.has(threadKey)) {
+      unsubscribe();
+      feedReplyUnsubscribers.delete(threadKey);
+      feedRepliesByThreadKey.delete(threadKey);
     }
-  );
+  });
+
+  desiredThreads.forEach((context, threadKey) => {
+    if (feedReplyUnsubscribers.has(threadKey)) {
+      return;
+    }
+
+    const repliesQuery = query(
+      collection(
+        db,
+        runtimeConfig.collections.users,
+        context.threadOwnerUid,
+        "activity",
+        context.activityId,
+        "replies"
+      ),
+      orderBy("createdAtMs", "asc")
+    );
+    const unsubscribe = onSnapshot(
+      repliesQuery,
+      (snapshot) => {
+        feedRepliesByThreadKey.set(
+          threadKey,
+          snapshot.docs.map((replyDoc) =>
+            normalizeThreadReply({
+              id: replyDoc.id,
+              threadOwnerUid: context.threadOwnerUid,
+              activityId: context.activityId,
+              ...replyDoc.data(),
+            })
+          )
+        );
+        setReplyCountForThreadKey(threadKey, snapshot.size);
+        rebuildFeedReplyEntriesFromThreadStreams();
+        rebuildMediaReplyCountsByItemKey();
+        renderFeedPageIfVisible();
+      },
+      (error) => {
+        console.warn("Could not subscribe to feed replies.", error);
+      }
+    );
+
+    feedReplyUnsubscribers.set(threadKey, unsubscribe);
+  });
+
+  rebuildFeedReplyEntriesFromThreadStreams();
+}
+
+function rebuildFeedReplyEntriesFromThreadStreams() {
+  feedReplyEntries = [...feedRepliesByThreadKey.values()]
+    .flat()
+    .sort(compareFeedEntriesByTime);
+}
+
+function setReplyCountForThreadKey(threadKey, count) {
+  if (!threadKey) {
+    return;
+  }
+
+  const nextReplyCountsByThreadKey = new Map(replyCountsByThreadKey);
+  const total = Number(count || 0);
+
+  if (total > 0) {
+    nextReplyCountsByThreadKey.set(threadKey, total);
+  } else {
+    nextReplyCountsByThreadKey.delete(threadKey);
+  }
+
+  replyCountsByThreadKey = nextReplyCountsByThreadKey;
+}
+
+function syncFeedLikeSubscriptions(entries = []) {
+  if (!db || !runtimeConfig?.collections?.users || !runtimeConfig?.collections?.trips || !currentUser?.uid) {
+    return;
+  }
+
+  const desiredTargets = getFeedLikeWatchTargets(entries);
+
+  feedLikeUnsubscribers.forEach((unsubscribe, targetKey) => {
+    if (!desiredTargets.has(targetKey)) {
+      unsubscribe();
+      feedLikeUnsubscribers.delete(targetKey);
+      feedLikeEventsByTargetKey.delete(targetKey);
+    }
+  });
+
+  desiredTargets.forEach((context, targetKey) => {
+    if (feedLikeUnsubscribers.has(targetKey)) {
+      return;
+    }
+
+    const unsubscribe = onSnapshot(
+      context.collectionRef,
+      (snapshot) => {
+        const actors = new Set();
+        const events = snapshot.docs
+          .map((likeDoc) => {
+            const actorUid = String(likeDoc.id || "");
+
+            if (!actorUid) {
+              return null;
+            }
+
+            actors.add(actorUid);
+            return buildFeedLikeEventFromDoc(likeDoc, context, actorUid);
+          })
+          .filter(Boolean);
+
+        setLikeActorsForTargetKey(targetKey, actors);
+        feedLikeEventsByTargetKey.set(targetKey, events);
+        rebuildFeedLikeEventsFromTargetStreams();
+        scheduleInteractionRefresh();
+      },
+      (error) => {
+        console.warn("Could not subscribe to feed likes.", error);
+      }
+    );
+
+    feedLikeUnsubscribers.set(targetKey, unsubscribe);
+  });
+
+  rebuildFeedLikeEventsFromTargetStreams();
+}
+
+function getFeedLikeWatchTargets(entries = []) {
+  const targets = new Map();
+  const addTarget = (context) => {
+    if (context?.targetKey && context.collectionRef) {
+      targets.set(context.targetKey, context);
+    }
+  };
+
+  entries.forEach((entry) => {
+    if (entry?.feedType === "upload") {
+      addTarget(buildMediaItemLikeWatchTarget(entry));
+      return;
+    }
+
+    addTarget(buildSocialLikeWatchTarget(entry));
+  });
+
+  getUniqueFeedRootActivities()
+    .slice(0, 180)
+    .forEach((entry) => addTarget(buildSocialLikeWatchTarget(entry)));
+
+  feedUploadItems
+    .slice(0, 180)
+    .forEach((item) => addTarget(buildMediaItemLikeWatchTarget(item)));
+
+  feedReplyEntries
+    .slice(0, 240)
+    .forEach((reply) => addTarget(buildSocialLikeWatchTarget(reply)));
+
+  return targets;
+}
+
+function buildSocialLikeWatchTarget(entry) {
+  const context = buildSocialLikeActionContext(entry);
+
+  if (!context?.targetKey) {
+    return null;
+  }
+
+  const collectionRef = getLikeCollectionRefForContext(context);
+
+  return collectionRef ? { ...context, collectionRef } : null;
+}
+
+function buildMediaItemLikeWatchTarget(entry) {
+  const item = entry?.item || entry;
+  const tripId = String(entry?.tripId || item?.tripId || "");
+  const folderId = String(entry?.folderId || item?.folderId || item?.sourceFolderId || "");
+  const itemId = String(entry?.itemId || item?.id || "");
+  const targetKey = buildMediaItemKey(tripId, folderId, itemId);
+
+  if (!targetKey) {
+    return null;
+  }
+
+  const context = {
+    targetKind: "media-item",
+    targetKey,
+    tripId,
+    folderId,
+    itemId,
+    commentId: "",
+    threadOwnerUid: "",
+    activityId: "",
+    actorUid: "",
+    replyId: "",
+  };
+  const collectionRef = getLikeCollectionRefForContext(context);
+
+  return collectionRef ? { ...context, collectionRef } : null;
+}
+
+function getLikeCollectionRefForContext(context) {
+  if (!db || !context?.targetKind) {
+    return null;
+  }
+
+  if (context.targetKind === "media-item" && context.tripId && context.folderId && context.itemId) {
+    return collection(
+      db,
+      runtimeConfig.collections.trips,
+      context.tripId,
+      "folders",
+      context.folderId,
+      "items",
+      context.itemId,
+      "likes"
+    );
+  }
+
+  if (
+    context.targetKind === "media-comment" &&
+    context.tripId &&
+    context.folderId &&
+    context.itemId &&
+    context.commentId
+  ) {
+    return collection(
+      db,
+      runtimeConfig.collections.trips,
+      context.tripId,
+      "folders",
+      context.folderId,
+      "items",
+      context.itemId,
+      "comments",
+      context.commentId,
+      "likes"
+    );
+  }
+
+  if (context.targetKind === "wall-post" && context.threadOwnerUid && context.activityId) {
+    return collection(
+      db,
+      runtimeConfig.collections.users,
+      context.threadOwnerUid,
+      "activity",
+      context.activityId,
+      "likes"
+    );
+  }
+
+  if (
+    context.targetKind === "thread-reply" &&
+    context.threadOwnerUid &&
+    context.activityId &&
+    context.replyId
+  ) {
+    return collection(
+      db,
+      runtimeConfig.collections.users,
+      context.threadOwnerUid,
+      "activity",
+      context.activityId,
+      "replies",
+      context.replyId,
+      "likes"
+    );
+  }
+
+  return null;
+}
+
+function buildFeedLikeEventFromDoc(likeDoc, context, actorUid) {
+  const data = likeDoc.data ? likeDoc.data() : {};
+
+  return {
+    id: `${context.targetKey}:${actorUid}`,
+    actorUid,
+    targetKey: context.targetKey,
+    targetKind: context.targetKind,
+    tripId: String(context.tripId || ""),
+    folderId: String(context.folderId || ""),
+    itemId: String(context.itemId || ""),
+    commentId: String(context.commentId || ""),
+    threadOwnerUid: String(context.threadOwnerUid || ""),
+    activityId: String(context.activityId || ""),
+    replyId: String(context.replyId || ""),
+    createdAtMs: coerceTimestampToMs(data?.createdAt, data?.createdAtMs),
+  };
+}
+
+function setLikeActorsForTargetKey(targetKey, actors) {
+  if (!targetKey) {
+    return;
+  }
+
+  const nextLikeActorsByTargetKey = new Map(likeActorsByTargetKey);
+  const actorSet = new Set(actors || []);
+
+  if (actorSet.size > 0) {
+    nextLikeActorsByTargetKey.set(targetKey, actorSet);
+  } else {
+    nextLikeActorsByTargetKey.delete(targetKey);
+  }
+
+  likeActorsByTargetKey = nextLikeActorsByTargetKey;
+}
+
+function rebuildFeedLikeEventsFromTargetStreams() {
+  feedLikeEvents = [...feedLikeEventsByTargetKey.values()]
+    .flat()
+    .sort(compareFeedEntriesByTime);
+}
+
+function stopFeedStreams() {
+  feedActivityUnsubscribers.forEach((unsubscribe) => unsubscribe());
+  feedReplyUnsubscribers.forEach((unsubscribe) => unsubscribe());
+  feedLikeUnsubscribers.forEach((unsubscribe) => unsubscribe());
+  feedActivityUnsubscribers = new Map();
+  feedActivityEntriesByUser = new Map();
+  feedReplyUnsubscribers = new Map();
+  feedRepliesByThreadKey = new Map();
+  feedLikeUnsubscribers = new Map();
+  feedLikeEventsByTargetKey = new Map();
+  feedRootActivities = [];
+  feedUploadItems = [];
+  feedReplyEntries = [];
+  feedLikeEvents = [];
 }
 
 function subscribeToMediaCommentAggregates() {
@@ -6460,6 +6834,7 @@ function normalizeMediaComment(comment) {
     itemId: String(comment?.itemId || ""),
     itemName: String(comment?.itemName || ""),
     sourceLabel: String(comment?.sourceLabel || ""),
+    likeCount: Number(comment?.likeCount || 0),
     createdAtMs: coerceTimestampToMs(comment?.createdAt, comment?.createdAtMs),
     editedAtMs: coerceTimestampToMs(comment?.editedAt, comment?.editedAtMs),
   };
@@ -6486,6 +6861,7 @@ function normalizeActivityEntry(entry) {
     attachmentStoragePath: String(entry?.attachmentStoragePath || ""),
     attachmentMimeType: String(entry?.attachmentMimeType || ""),
     attachmentName: String(entry?.attachmentName || ""),
+    likeCount: Number(entry?.likeCount || 0),
     createdAtMs: coerceTimestampToMs(entry?.createdAt, entry?.createdAtMs),
     editedAtMs: coerceTimestampToMs(entry?.editedAt, entry?.editedAtMs),
   };
@@ -6500,10 +6876,16 @@ function buildMediaItemLikeContext(previewState = getCurrentVideoPreviewState())
   }
 
   return {
+    targetKind: "media-item",
+    targetKey: buildMediaItemKey(previewState.tripId, sourceFolderId, item.id),
     tripId: previewState.tripId,
     folderId: sourceFolderId,
     itemId: item.id,
-    likeKey: buildMediaItemKey(previewState.tripId, sourceFolderId, item.id),
+    commentId: "",
+    threadOwnerUid: "",
+    activityId: "",
+    actorUid: "",
+    replyId: "",
   };
 }
 
@@ -6524,6 +6906,7 @@ function normalizeThreadRootEntry(entry) {
     attachmentStoragePath: String(entry?.attachmentStoragePath || ""),
     attachmentMimeType: String(entry?.attachmentMimeType || ""),
     attachmentName: String(entry?.attachmentName || ""),
+    likeCount: Number(entry?.likeCount || 0),
     createdAtMs: coerceTimestampToMs(entry?.createdAt, entry?.createdAtMs),
     editedAtMs: coerceTimestampToMs(entry?.editedAt, entry?.editedAtMs),
   };
@@ -6545,6 +6928,7 @@ function normalizeThreadReply(reply) {
     attachmentName: String(reply?.attachmentName || ""),
     threadOwnerUid: String(reply?.threadOwnerUid || ""),
     activityId: String(reply?.activityId || ""),
+    likeCount: Number(reply?.likeCount || 0),
     createdAtMs: coerceTimestampToMs(reply?.createdAt, reply?.createdAtMs),
     editedAtMs: coerceTimestampToMs(reply?.editedAt, reply?.editedAtMs),
   };
@@ -6575,7 +6959,7 @@ function renderSocialInteractionBar(entry, options = {}) {
   const likeContext = buildSocialLikeActionContext(entry);
   const likeButtonMarkup = renderSocialLikeButton(entry);
   const likeBadgeMarkup = likeContext?.targetKey
-    ? renderSocialMetricBadge(getLikeCountForTargetKey(likeContext.targetKey), "LIKE")
+    ? renderSocialMetricBadge(getLikeCountForTargetKey(likeContext.targetKey, entry?.likeCount), "LIKE")
     : "";
   const shouldShowReplyCount = options.includeReplyCount !== false && entry?.type !== "thread-reply";
   const replyBadgeMarkup = shouldShowReplyCount
@@ -6908,6 +7292,7 @@ function buildSocialLikeActionContext(entry) {
       commentId: String(entry?.id || ""),
       threadOwnerUid: String(entry?.authorUid || entry?.actorUid || ""),
       activityId: String(entry?.id || ""),
+      actorUid: String(entry?.authorUid || entry?.actorUid || ""),
       replyId: "",
     };
   }
@@ -6922,6 +7307,7 @@ function buildSocialLikeActionContext(entry) {
       commentId: "",
       threadOwnerUid: String(entry?.targetUserUid || ""),
       activityId: String(entry?.id || ""),
+      actorUid: String(entry?.actorUid || ""),
       replyId: "",
     };
   }
@@ -6936,6 +7322,7 @@ function buildSocialLikeActionContext(entry) {
       commentId: "",
       threadOwnerUid: String(entry?.threadOwnerUid || ""),
       activityId: String(entry?.activityId || ""),
+      actorUid: String(entry?.actorUid || ""),
       replyId: String(entry?.id || ""),
     };
   }
@@ -6991,6 +7378,7 @@ function renderSocialLikeActionAttributes(context) {
     ["data-comment-id", context?.commentId || ""],
     ["data-thread-owner-uid", context?.threadOwnerUid || ""],
     ["data-activity-id", context?.activityId || ""],
+    ["data-actor-uid", context?.actorUid || ""],
     ["data-reply-id", context?.replyId || ""],
   ]
     .map(([name, value]) => `${name}="${escapeHtml(String(value || ""))}"`)
@@ -7120,6 +7508,7 @@ function readSocialLikeActionContext(element) {
     commentId: String(element.getAttribute("data-comment-id") || ""),
     threadOwnerUid: String(element.getAttribute("data-thread-owner-uid") || ""),
     activityId: String(element.getAttribute("data-activity-id") || ""),
+    actorUid: String(element.getAttribute("data-actor-uid") || ""),
     replyId: String(element.getAttribute("data-reply-id") || ""),
   };
 }
@@ -7166,8 +7555,18 @@ function buildThreadKey(threadOwnerUid, activityId) {
   return threadOwnerUid && activityId ? `${threadOwnerUid}:${activityId}` : "";
 }
 
-function getLikeCountForTargetKey(targetKey) {
-  return targetKey ? Number(likeActorsByTargetKey.get(targetKey)?.size || 0) : 0;
+function getLikeCountForTargetKey(targetKey, fallbackCount = 0) {
+  if (!targetKey) {
+    return Number(fallbackCount || 0);
+  }
+
+  const liveActors = likeActorsByTargetKey.get(targetKey);
+
+  if (liveActors) {
+    return liveActors.size;
+  }
+
+  return Number(fallbackCount || 0);
 }
 
 function isTargetLikedByCurrentUser(targetKey) {
@@ -7193,7 +7592,7 @@ function getMediaItemInteractionCounts(item, tripId, folderId) {
 
   return {
     itemKey,
-    likeCount: getLikeCountForTargetKey(itemKey),
+    likeCount: getLikeCountForTargetKey(itemKey, item?.likeCount),
     commentCount: Number(mediaCommentCountsByItemKey.get(itemKey) || 0),
     replyCount: Number(mediaReplyCountsByItemKey.get(itemKey) || 0),
   };
@@ -7482,9 +7881,6 @@ function renderVisibleRouteContent() {
     if (feedAllList) {
       feedAllList.innerHTML = "";
     }
-    if (feedYourList) {
-      feedYourList.innerHTML = "";
-    }
     return;
   }
 
@@ -7615,20 +8011,167 @@ function getSocialLikeDocRef(context, userUid) {
   return null;
 }
 
-async function toggleLikeAtRef(likeRef) {
-  const likeSnapshot = await getDoc(likeRef);
-
-  if (likeSnapshot.exists()) {
-    await deleteDoc(likeRef);
-    return false;
+function getLikeDocRefForContext(context, userUid) {
+  if (!context?.targetKind || !userUid) {
+    return null;
   }
 
-  await setDoc(likeRef, {
-    createdAt: serverTimestamp(),
-    createdAtMs: Date.now(),
-  });
+  if (context.targetKind === "media-item") {
+    return getMediaItemLikeDocRef(context, userUid);
+  }
 
-  return true;
+  return getSocialLikeDocRef(context, userUid);
+}
+
+function getLikeTargetDocRef(context) {
+  if (!db || !context?.targetKind) {
+    return null;
+  }
+
+  if (context.targetKind === "media-item") {
+    return doc(
+      db,
+      runtimeConfig.collections.trips,
+      context.tripId,
+      "folders",
+      context.folderId,
+      "items",
+      context.itemId
+    );
+  }
+
+  if (context.targetKind === "media-comment") {
+    return getMediaCommentDocRef(context);
+  }
+
+  if (context.targetKind === "wall-post") {
+    return getActivityDocRef(context.threadOwnerUid, context.activityId);
+  }
+
+  if (context.targetKind === "thread-reply") {
+    return doc(
+      db,
+      runtimeConfig.collections.users,
+      context.threadOwnerUid,
+      "activity",
+      context.activityId,
+      "replies",
+      context.replyId
+    );
+  }
+
+  return null;
+}
+
+function getLikeMirrorTargetDocRefs(context, primaryRef) {
+  const refs = [];
+  const seenPaths = new Set(primaryRef?.path ? [primaryRef.path] : []);
+  const addRef = (ref) => {
+    if (!ref?.path || seenPaths.has(ref.path)) {
+      return;
+    }
+
+    seenPaths.add(ref.path);
+    refs.push(ref);
+  };
+
+  if (context?.targetKind === "media-comment" && context.threadOwnerUid && context.activityId) {
+    addRef(getActivityDocRef(context.threadOwnerUid, context.activityId));
+  }
+
+  if (
+    context?.targetKind === "wall-post" &&
+    context.actorUid &&
+    context.activityId &&
+    context.actorUid !== context.threadOwnerUid
+  ) {
+    addRef(getActivityDocRef(context.actorUid, context.activityId));
+  }
+
+  return refs;
+}
+
+function getLikedArrayFieldForContext(context) {
+  return context?.targetKind === "media-item" ? "likedMedia" : "likedComments";
+}
+
+function getLikedArrayValueForContext(context) {
+  return String(context?.targetKey || "");
+}
+
+async function toggleLikeForContext(context, userUid) {
+  try {
+    return await writeLikeStateTransaction(context, userUid, true);
+  } catch (error) {
+    if (!isFirestorePermissionError(error)) {
+      throw error;
+    }
+
+    return writeLikeStateTransaction(context, userUid, false);
+  }
+}
+
+async function writeLikeStateTransaction(context, userUid, includeCreatedAtMs = true) {
+  const likeRef = getLikeDocRefForContext(context, userUid);
+  const targetRef = getLikeTargetDocRef(context);
+  const userRef = userUid ? doc(db, runtimeConfig.collections.users, userUid) : null;
+  const likedArrayField = getLikedArrayFieldForContext(context);
+  const likedArrayValue = getLikedArrayValueForContext(context);
+
+  if (!likeRef || !targetRef || !userRef || !likedArrayField || !likedArrayValue) {
+    throw new Error("Like target is missing.");
+  }
+
+  return runTransaction(db, async (transaction) => {
+    const likeSnapshot = await transaction.get(likeRef);
+    const targetSnapshot = await transaction.get(targetRef);
+    const mirrorTargetSnapshots = [];
+    const mirrorTargetRefs = getLikeMirrorTargetDocRefs(context, targetRef);
+    const nextLiked = !likeSnapshot.exists();
+    const currentLikeCount = Math.max(Number(targetSnapshot.data()?.likeCount || 0), 0);
+    const nextLikeCount = nextLiked
+      ? currentLikeCount + 1
+      : Math.max(currentLikeCount - 1, 0);
+    const likePayload = includeCreatedAtMs
+      ? {
+          createdAt: serverTimestamp(),
+          createdAtMs: Date.now(),
+        }
+      : {
+          createdAt: serverTimestamp(),
+        };
+
+    for (const mirrorRef of mirrorTargetRefs) {
+      mirrorTargetSnapshots.push({
+        ref: mirrorRef,
+        snapshot: await transaction.get(mirrorRef),
+      });
+    }
+
+    if (nextLiked) {
+      transaction.set(likeRef, likePayload);
+      transaction.update(targetRef, { likeCount: nextLikeCount });
+      mirrorTargetSnapshots.forEach(({ ref, snapshot }) => {
+        if (snapshot.exists()) {
+          const mirrorLikeCount = Math.max(Number(snapshot.data()?.likeCount || 0), 0);
+          transaction.update(ref, { likeCount: mirrorLikeCount + 1 });
+        }
+      });
+      transaction.update(userRef, { [likedArrayField]: arrayUnion(likedArrayValue) });
+    } else {
+      transaction.delete(likeRef);
+      transaction.update(targetRef, { likeCount: nextLikeCount });
+      mirrorTargetSnapshots.forEach(({ ref, snapshot }) => {
+        if (snapshot.exists()) {
+          const mirrorLikeCount = Math.max(Number(snapshot.data()?.likeCount || 0), 0);
+          transaction.update(ref, { likeCount: Math.max(mirrorLikeCount - 1, 0) });
+        }
+      });
+      transaction.update(userRef, { [likedArrayField]: arrayRemove(likedArrayValue) });
+    }
+
+    return nextLiked;
+  });
 }
 
 function applyLocalLikeState(targetKey, userUid, liked) {
@@ -7702,6 +8245,8 @@ function syncThreadRepliesSubscription(context = currentThreadContext) {
           })
         )
       );
+      setReplyCountForThreadKey(nextKey, snapshot.size);
+      rebuildMediaReplyCountsByItemKey();
 
       if (currentThreadRepliesKey === nextKey) {
         if (currentThreadSurface === "modal") {
@@ -9436,20 +9981,38 @@ function renderFeedPageIfVisible() {
   }
 }
 
+function handleFeedScopeChange(event) {
+  const nextScope = event?.target?.value === FEED_SCOPE_YOURS
+    ? FEED_SCOPE_YOURS
+    : FEED_SCOPE_ALL;
+
+  if (feedActivityScope === nextScope) {
+    return;
+  }
+
+  feedActivityScope = nextScope;
+  renderFeedPage();
+}
+
 function renderFeedPage() {
+  syncFeedScopeControls();
+
   if (!canUploadMedia()) {
     setFeedStatus("SIGN IN TO VIEW ACTIVITY.");
     if (feedAllList) {
       feedAllList.innerHTML = "";
     }
-    if (feedYourList) {
-      feedYourList.innerHTML = "";
-    }
     return;
   }
 
   const allEntries = buildAllFeedEntries();
+  syncFeedLikeSubscriptions(allEntries);
   const yourEntries = buildYourFeedEntries(allEntries);
+  const activeEntries = feedActivityScope === FEED_SCOPE_YOURS ? yourEntries : allEntries;
+  const activeScope = feedActivityScope === FEED_SCOPE_YOURS ? "yours" : "all";
+  const emptyMessage = feedActivityScope === FEED_SCOPE_YOURS
+    ? "NOTHING FOR YOU YET."
+    : "NO ACTIVITY YET.";
 
   setFeedStatus(
     allEntries.length > 0
@@ -9466,16 +10029,11 @@ function renderFeedPage() {
   }
 
   if (feedAllList) {
-    feedAllList.innerHTML = allEntries.length > 0
-      ? allEntries.map((entry) => renderFeedEntry(entry, "all")).join("")
-      : renderEmptySocialState("NO ACTIVITY YET.");
+    feedAllList.innerHTML = activeEntries.length > 0
+      ? activeEntries.map((entry) => renderFeedEntry(entry, activeScope)).join("")
+      : renderEmptySocialState(emptyMessage);
   }
 
-  if (feedYourList) {
-    feedYourList.innerHTML = yourEntries.length > 0
-      ? yourEntries.map((entry) => renderFeedEntry(entry, "yours")).join("")
-      : renderEmptySocialState("NOTHING FOR YOU YET.");
-  }
 }
 
 function setFeedStatus(message) {
@@ -9484,10 +10042,21 @@ function setFeedStatus(message) {
   }
 }
 
+function syncFeedScopeControls() {
+  if (feedScopeAllInput) {
+    feedScopeAllInput.checked = feedActivityScope !== FEED_SCOPE_YOURS;
+  }
+
+  if (feedScopeYourInput) {
+    feedScopeYourInput.checked = feedActivityScope === FEED_SCOPE_YOURS;
+  }
+}
+
 function buildAllFeedEntries() {
   const rootEntries = getUniqueFeedRootActivities()
     .filter((entry) => entry.type === "media-comment" || entry.type === "wall-post")
     .map((entry) => ({ ...entry, feedType: entry.type }));
+  feedUploadItems = getFeedUploadItemsFromLoadedFolders();
   const uploadEntries = feedUploadItems
     .filter((item) => item.kind === "file")
     .map((item) => buildUploadFeedEntry(item))
@@ -9496,6 +10065,29 @@ function buildAllFeedEntries() {
   return [...rootEntries, ...uploadEntries]
     .sort(compareFeedEntriesByTime)
     .slice(0, 120);
+}
+
+function getFeedUploadItemsFromLoadedFolders() {
+  const byKey = new Map();
+
+  itemsByFolder.forEach((items, cacheKey) => {
+    const [, tripId, folderId] = String(cacheKey || "").split(":");
+
+    (items || []).forEach((item) => {
+      if (item?.kind !== "file" || !tripId || !folderId || isHighlightFolder(folderId)) {
+        return;
+      }
+
+      const normalizedItem = {
+        ...item,
+        tripId: item.tripId || tripId,
+        folderId: item.folderId || folderId,
+      };
+      byKey.set(`${tripId}:${folderId}:${item.id}`, normalizedItem);
+    });
+  });
+
+  return [...byKey.values()].sort(compareFeedEntriesByTime);
 }
 
 function buildYourFeedEntries(allEntries = buildAllFeedEntries()) {
@@ -12156,6 +12748,7 @@ function normalizeItem(item) {
     storagePath: String(item?.storagePath || ""),
     posterDownloadURL: String(item?.posterDownloadURL || ""),
     posterStoragePath: String(item?.posterStoragePath || ""),
+    likeCount: Number(item?.likeCount || 0),
     authorLabel: String(item?.authorLabel || ""),
     authorUid: String(item?.authorUid || ""),
     authorRouteId: normalizeRouteId(item?.authorRouteId),
@@ -12191,6 +12784,8 @@ function normalizeFriend(user) {
     photoStoragePath: String(user?.photoStoragePath || ""),
     role,
     isAdmin: isElevatedRole(role),
+    likedMedia: Array.isArray(user?.likedMedia) ? user.likedMedia.map(String) : [],
+    likedComments: Array.isArray(user?.likedComments) ? user.likedComments.map(String) : [],
     lastActiveAtMs: coerceTimestampToMs(user?.lastActiveAt, user?.lastActiveAtMs),
   };
 }

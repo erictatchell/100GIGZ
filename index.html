@@ -908,26 +908,25 @@
           </div>
         </div>
 
-        <div class="mt-5 grid min-w-0 gap-5 xl:grid-cols-2">
-          <section class="min-w-0 border border-white/10 bg-black/24 p-3 sm:p-4">
-            <div class="flex items-end justify-between gap-3 border-b border-white/10 pb-3">
-              <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.22em] text-stone-100/78">
-                All Activity
-              </p>
-              <p id="feed-all-count" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-400/72"></p>
-            </div>
-            <div id="feed-all-list" class="mt-4 space-y-3"></div>
-          </section>
-
-          <section class="min-w-0 border border-white/10 bg-black/24 p-3 sm:p-4">
-            <div class="flex items-end justify-between gap-3 border-b border-white/10 pb-3">
-              <p class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.66rem] uppercase tracking-[0.22em] text-stone-100/78">
-                Your Activity
-              </p>
-              <p id="feed-your-count" class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.16em] text-stone-400/72"></p>
-            </div>
-            <div id="feed-your-list" class="mt-4 space-y-3"></div>
-          </section>
+        <div class="mt-5 min-w-0">
+          <fieldset id="feed-scope-picker" class="flex w-full flex-col gap-2 border-b border-white/10 pb-4 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] uppercase tracking-[0.16em] sm:w-auto sm:flex-row">
+            <legend class="sr-only">Activity feed view</legend>
+            <label class="group cursor-pointer">
+              <input id="feed-scope-all" class="peer sr-only" type="radio" name="feed-scope" value="all" checked>
+              <span class="flex min-h-10 items-center justify-between gap-3 border border-white/12 bg-black/28 px-3 py-2 text-[0.62rem] text-stone-300/72 transition peer-checked:border-sky-200/62 peer-checked:bg-sky-100/[0.08] peer-checked:text-sky-50 hover:border-white/28 hover:bg-white/[0.05]">
+                <span>All Activity</span>
+                <span id="feed-all-count" class="text-[0.56rem] text-stone-400/72 peer-checked:text-sky-100/72"></span>
+              </span>
+            </label>
+            <label class="group cursor-pointer">
+              <input id="feed-scope-yours" class="peer sr-only" type="radio" name="feed-scope" value="yours">
+              <span class="flex min-h-10 items-center justify-between gap-3 border border-white/12 bg-black/28 px-3 py-2 text-[0.62rem] text-stone-300/72 transition peer-checked:border-sky-200/62 peer-checked:bg-sky-100/[0.08] peer-checked:text-sky-50 hover:border-white/28 hover:bg-white/[0.05]">
+                <span>Your Activity</span>
+                <span id="feed-your-count" class="text-[0.56rem] text-stone-400/72 peer-checked:text-sky-100/72"></span>
+              </span>
+            </label>
+          </fieldset>
+          <div id="feed-all-list" class="mt-4 space-y-3"></div>
         </div>
       </section>
 
