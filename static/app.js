@@ -1400,16 +1400,7 @@ function initializeAuthListener() {
     currentUserProfile = null;
 
     if (user) {
-      window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
-      setGoogleAutoRedirectAttempted(false);
-      try {
-        currentUserProfile = await syncUserRecord(user);
-        syncFeedActivitySubscriptions();
-        startPresenceHeartbeat();
-        await syncDefaultTripsIfNeeded();
-      } catch (error) {
-        showWarning(getErrorMessage(error, STRINGS.errors.userSyncFailed));
-      }
+      await activateAuthenticatedGoogleSession(user);
     } else {
       lockSiteShell();
       beginRouteLoadingOverlay();
@@ -2476,6 +2467,43 @@ function createGoogleProvider() {
   return provider;
 }
 
+async function waitForFirebaseAuthState() {
+  if (typeof auth?.authStateReady === "function") {
+    await auth.authStateReady();
+  }
+}
+
+async function activateAuthenticatedGoogleSession(user) {
+  const activeUser = user || auth?.currentUser;
+
+  if (!activeUser?.uid) {
+    return false;
+  }
+
+  authStateReady = true;
+  googleRedirectResultPending = false;
+  googleRedirectInProgress = false;
+  googleSignInRequestInFlight = false;
+  currentUser = activeUser;
+  currentUserProfile = null;
+  window.sessionStorage?.removeItem(GOOGLE_REDIRECT_STORAGE_KEY);
+  setGoogleAutoRedirectAttempted(false);
+  setVaultGoogleButtonVisible(false);
+  hideVaultGateImmediately();
+  revealSiteShell();
+
+  try {
+    currentUserProfile = await syncUserRecord(activeUser);
+    syncFeedActivitySubscriptions();
+    startPresenceHeartbeat();
+    await syncDefaultTripsIfNeeded();
+  } catch (error) {
+    showWarning(getErrorMessage(error, STRINGS.errors.userSyncFailed));
+  }
+
+  return true;
+}
+
 async function settleGoogleRedirectResultIfNeeded() {
   if (!auth || window.sessionStorage?.getItem(GOOGLE_REDIRECT_STORAGE_KEY) !== "1") {
     return;
@@ -2486,7 +2514,12 @@ async function settleGoogleRedirectResultIfNeeded() {
   beginRouteLoadingOverlay();
 
   try {
-    await getRedirectResult(auth);
+    const result = await getRedirectResult(auth);
+    await waitForFirebaseAuthState();
+    if (await activateAuthenticatedGoogleSession(result?.user || auth.currentUser)) {
+      syncDefaultAdminMode();
+      renderAll();
+    }
   } catch (error) {
     if (authDetail) {
       authDetail.textContent = getFriendlyAuthMessage(error);
@@ -2525,7 +2558,12 @@ async function requestGoogleSignIn(message = STRINGS.auth.signingIn, options = {
       return;
     }
 
-    await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    await waitForFirebaseAuthState();
+    if (await activateAuthenticatedGoogleSession(result?.user || auth.currentUser)) {
+      syncDefaultAdminMode();
+      renderAll();
+    }
   } catch (error) {
     googleRedirectInProgress = false;
     googleSignInRequestInFlight = false;
@@ -2550,6 +2588,10 @@ async function handleSignOut() {
     if (auth) {
       await firebaseSignOut(auth);
     }
+    authStateReady = true;
+    currentUser = null;
+    currentUserProfile = null;
+    showGoogleSessionGate("SIGN IN WITH GOOGLE TO ENTER 100GIGZ.");
   } catch (error) {
     authDetail.textContent = getErrorMessage(error, STRINGS.errors.signOutFailed);
   }
