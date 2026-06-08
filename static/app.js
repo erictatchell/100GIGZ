@@ -7999,11 +7999,33 @@ function getLikeCountForTargetKey(targetKey, fallbackCount = 0) {
 }
 
 function isTargetLikedByCurrentUser(targetKey) {
-  return Boolean(
-    targetKey &&
-      currentUser?.uid &&
-      likeActorsByTargetKey.get(targetKey)?.has(currentUser.uid)
-  );
+  if (!targetKey || !currentUser?.uid) {
+    return false;
+  }
+
+  const liveActors = likeActorsByTargetKey.get(targetKey);
+
+  if (liveActors) {
+    return liveActors.has(currentUser.uid);
+  }
+
+  return isTargetKeyInCurrentUserLikedArrays(targetKey);
+}
+
+function getLikedArrayFieldForTargetKey(targetKey) {
+  return String(targetKey || "").startsWith("media-item:")
+    ? "likedMedia"
+    : "likedComments";
+}
+
+function getCurrentUserLikeProfile() {
+  return currentUserProfile || friends.find((friend) => friend.uid === currentUser?.uid) || null;
+}
+
+function isTargetKeyInCurrentUserLikedArrays(targetKey) {
+  const profile = getCurrentUserLikeProfile();
+  const field = getLikedArrayFieldForTargetKey(targetKey);
+  return Boolean(profile && Array.isArray(profile[field]) && profile[field].includes(targetKey));
 }
 
 function getReplyCountForThreadKey(threadKey) {
@@ -8674,6 +8696,36 @@ function applyLocalLikeState(targetKey, userUid, liked) {
   }
 
   likeActorsByTargetKey = nextLikeActorsByTargetKey;
+  applyLocalLikedArrayState(targetKey, userUid, liked);
+}
+
+function applyLocalLikedArrayState(targetKey, userUid, liked) {
+  if (!targetKey || !userUid || userUid !== currentUser?.uid) {
+    return;
+  }
+
+  const field = getLikedArrayFieldForTargetKey(targetKey);
+  const updateProfile = (profile) => {
+    if (!profile) {
+      return profile;
+    }
+
+    const currentValues = new Set(Array.isArray(profile[field]) ? profile[field] : []);
+
+    if (liked) {
+      currentValues.add(targetKey);
+    } else {
+      currentValues.delete(targetKey);
+    }
+
+    return {
+      ...profile,
+      [field]: [...currentValues],
+    };
+  };
+
+  currentUserProfile = updateProfile(currentUserProfile);
+  friends = friends.map((friend) => (friend.uid === userUid ? updateProfile(friend) : friend));
 }
 
 function syncThreadRepliesSubscription(context = currentThreadContext) {
