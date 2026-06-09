@@ -133,6 +133,7 @@ const logo = document.getElementById("logo");
 const tripList = document.getElementById("trip-list");
 const tripCount = document.getElementById("trip-count");
 const clearCommentNotificationsButton = document.getElementById("clear-comment-notifications-button");
+const clearFeedCommentNotificationsButton = document.getElementById("clear-feed-comment-notifications-button");
 const footerTickerTrack = document.getElementById("footer-ticker-track");
 const footerPrivacyLink = document.getElementById("footer-privacy-link");
 const footerTosLink = document.getElementById("footer-tos-link");
@@ -406,13 +407,16 @@ const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024;
 const MAX_PROFILE_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_TRIP_COVER_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_SOCIAL_BODY_LENGTH = 600;
-const AUTOPLAY_IMAGE_DURATION_MS = 4000;
+const AUTOPLAY_IMAGE_DURATION_MS = 3000;
 const AUTOPLAY_COUNTDOWN_INTERVAL_MS = 250;
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const PRESENCE_HEARTBEAT_INTERVAL_MS = 60 * 1000;
 const RECENT_MEDIA_VIEW_WINDOW_MS = 3 * 60 * 60 * 1000;
 const RECENT_MEDIA_VIEW_STORAGE_KEY = "100gigz-recent-media-views";
 const COMMENT_NOTIFICATION_STORAGE_KEY = "100gigz-cleared-media-comment-notifications";
+const COMMENT_NOTIFICATION_HIGHLIGHT_MS = 1800;
+const COMMENT_NOTIFICATION_VIEWPORT_CLEAR_MS = 1200;
+const COMMENT_NOTIFICATION_FADE_MS = 360;
 const GOOGLE_REDIRECT_STORAGE_KEY = "100gigz-google-redirect-requested";
 const ITEM_SORT_MEDIA_DATE_DESC = "media-date-desc";
 const ITEM_SORT_MEDIA_DATE_ASC = "media-date-asc";
@@ -504,6 +508,10 @@ let interactionRefreshFrame = 0;
 let commentNotificationUserUid = "";
 let clearedMediaCommentNotificationKeys = new Set();
 let currentVideoPreviewNotificationCommentIds = new Set();
+let videoPreviewNotificationHighlightTimer = 0;
+let commentNotificationViewportObserver = null;
+let commentNotificationViewportSyncFrame = 0;
+let commentNotificationViewportClearTimers = new Map();
 let currentRoute = normalizeRoute(window.location.pathname);
 let featuredMessage = DEFAULT_FEATURED_MESSAGE;
 let featuredClip = null;
@@ -1601,6 +1609,7 @@ function setupForms() {
   tripForm?.addEventListener("submit", handleTripSubmit);
   folderForm?.addEventListener("submit", handleFolderSubmit);
   clearCommentNotificationsButton?.addEventListener("click", handleClearCommentNotificationsClick);
+  clearFeedCommentNotificationsButton?.addEventListener("click", handleClearActivityNotificationsClick);
   uploadForm?.addEventListener("submit", handleUploadSubmit);
   textPostForm?.addEventListener("submit", handleTextPostSubmit);
   editPostForm?.addEventListener("submit", handleEditTextPostSubmit);
@@ -1614,8 +1623,8 @@ function setupForms() {
   moveItemCloseButton?.addEventListener("click", resetItemMoveDialog);
   moveItemCancelButton?.addEventListener("click", resetItemMoveDialog);
   moveItemBackdrop?.addEventListener("click", resetItemMoveDialog);
-  videoPreviewCloseButton?.addEventListener("click", resetVideoPreview);
-  videoPreviewBackdrop?.addEventListener("click", resetVideoPreview);
+  videoPreviewCloseButton?.addEventListener("click", handleVideoPreviewDismissClick);
+  videoPreviewBackdrop?.addEventListener("click", handleVideoPreviewDismissClick);
   videoPreviewPrevButton?.addEventListener("click", () => navigateVideoPreview(-1, { manual: true }));
   videoPreviewNextButton?.addEventListener("click", () => navigateVideoPreview(1, { manual: true }));
   videoPreviewFloatingPrevButton?.addEventListener("click", () => videoPreviewPrevButton?.click());
@@ -1648,8 +1657,8 @@ function setupForms() {
   contributeCloseButton?.addEventListener("click", resetContributeDialog);
   contributeBackdrop?.addEventListener("click", resetContributeDialog);
   contributeModal?.addEventListener("click", handleContributeModalClick);
-  textPreviewCloseButton?.addEventListener("click", resetTextPreview);
-  textPreviewBackdrop?.addEventListener("click", resetTextPreview);
+  textPreviewCloseButton?.addEventListener("click", handleTextPreviewDismissClick);
+  textPreviewBackdrop?.addEventListener("click", handleTextPreviewDismissClick);
   signOutButton?.addEventListener("click", handleSignOut);
   bannerSignOutButton?.addEventListener("click", handleSignOut);
   adminPanelsToggle?.addEventListener("change", handleAdminPanelsToggleChange);
@@ -1750,17 +1759,32 @@ function handleDesktopActivityClick() {
 }
 
 function handleClearCommentNotificationsClick() {
-  const notifications = getNewMediaCommentNotifications();
+  const notifications = getNewMediaNotifications();
 
   if (notifications.length === 0) {
     syncCommentNotificationControls();
     return;
   }
 
-  clearMediaCommentNotifications(notifications);
+  clearMediaNotifications(notifications);
 
   if (authDetail) {
-    authDetail.textContent = "COMMENT NOTIFICATIONS CLEARED.";
+    authDetail.textContent = "MEDIA NOTIFICATIONS CLEARED.";
+  }
+}
+
+function handleClearActivityNotificationsClick() {
+  const notifications = getNewActivityNotifications();
+
+  if (notifications.length === 0) {
+    syncCommentNotificationControls();
+    return;
+  }
+
+  clearActivityNotifications(notifications);
+
+  if (authDetail) {
+    authDetail.textContent = "NOTIFICATIONS CLEARED.";
   }
 }
 
@@ -1790,6 +1814,16 @@ function handleVideoPreviewCommentToggleClick() {
   }
 }
 
+function handleVideoPreviewDismissClick(event) {
+  event?.stopPropagation?.();
+  resetVideoPreview();
+}
+
+function handleTextPreviewDismissClick(event) {
+  event?.stopPropagation?.();
+  resetTextPreview();
+}
+
 function handleDocumentTripCollapseClick(event) {
   if (
     isMobileTripLayout() ||
@@ -1800,6 +1834,10 @@ function handleDocumentTripCollapseClick(event) {
     moveItemModalOpen ||
     editPostModalOpen
   ) {
+    return;
+  }
+
+  if (event.target.closest("#video-preview-modal, #text-preview-modal")) {
     return;
   }
 
@@ -3371,7 +3409,10 @@ function handleSocialCommentActionClick(event) {
 
   if (
     sourceTrigger &&
-    !event.target.closest("a[href], button, input, textarea, select, label, summary, details, form")
+    (
+      sourceTrigger.tagName === "BUTTON" ||
+      !event.target.closest("a[href], button, input, textarea, select, label, summary, details, form")
+    )
   ) {
     event.preventDefault();
     void handleActivitySourceClick(sourceTrigger);
@@ -6556,15 +6597,8 @@ function openVideoPreview(tripId, folderId, itemId, view = "archive", options = 
     return;
   }
 
-  const newCommentNotifications = getNewMediaCommentNotificationsForItem(
-    previewState.currentItem,
-    previewState.tripId,
-    previewState.folderId
-  );
-  currentVideoPreviewNotificationCommentIds = new Set(
-    newCommentNotifications.map((comment) => comment.id).filter(Boolean)
-  );
-  clearMediaCommentNotifications(newCommentNotifications, { render: false });
+  clearVideoPreviewNotificationHighlight({ render: false });
+  const newCommentNotifications = consumeMediaCommentNotificationsForPreview(previewState);
 
   videoPreviewCommentComposerOpen = false;
   markPreviewItemViewed(previewState);
@@ -6628,7 +6662,7 @@ function resetVideoPreview() {
   setVideoPreviewAutoplayEnabled(false);
   resetVideoPreviewThreadSelection();
   videoPreviewCommentComposerOpen = false;
-  currentVideoPreviewNotificationCommentIds = new Set();
+  clearVideoPreviewNotificationHighlight({ render: false });
   currentVideoPreviewContext = null;
   syncVideoPreviewNavigation(null);
   syncVideoPreviewMedia(null);
@@ -7142,6 +7176,9 @@ function syncMediaCommentsSubscription(previewState = getCurrentVideoPreviewStat
       );
       mediaCommentsByKey.set(nextKey, comments);
       syncMediaCommentAggregateCacheForItem(context, comments);
+      if (buildMediaCommentContext(getCurrentVideoPreviewState())?.key === nextKey) {
+        consumeMediaCommentNotificationsForPreview(getCurrentVideoPreviewState());
+      }
       scheduleInteractionRefresh();
       renderVideoPreviewComments(getCurrentVideoPreviewState());
     },
@@ -7204,6 +7241,37 @@ function buildMediaCommentNotificationKey(comment) {
   );
 }
 
+function buildMediaReplyNotificationKey(reply) {
+  return reply?.threadOwnerUid && reply?.activityId && reply?.id
+    ? `media-comment-reply:${reply.threadOwnerUid}:${reply.activityId}:${reply.id}`
+    : "";
+}
+
+function buildWallPostNotificationKey(entry) {
+  const targetUserUid = String(entry?.targetUserUid || entry?.activityOwnerUid || "");
+  const activityId = String(entry?.id || "");
+
+  return targetUserUid && activityId
+    ? `wall-post:${targetUserUid}:${activityId}`
+    : "";
+}
+
+function buildActivityNotificationKey(entry) {
+  if (entry?.type === "media-comment") {
+    return buildMediaCommentNotificationKey(entry);
+  }
+
+  if (entry?.type === "thread-reply") {
+    return buildMediaReplyNotificationKey(entry);
+  }
+
+  if (entry?.type === "wall-post") {
+    return buildWallPostNotificationKey(entry);
+  }
+
+  return "";
+}
+
 function getCommentNotificationStorageKey(uid = currentUser?.uid) {
   return `${COMMENT_NOTIFICATION_STORAGE_KEY}:${String(uid || "anonymous")}`;
 }
@@ -7219,7 +7287,7 @@ function syncCommentNotificationUserState(uid = currentUser?.uid || "") {
   clearedMediaCommentNotificationKeys = nextUid
     ? loadClearedMediaCommentNotificationKeys(nextUid)
     : new Set();
-  currentVideoPreviewNotificationCommentIds = new Set();
+  clearVideoPreviewNotificationHighlight({ render: false });
 }
 
 function loadClearedMediaCommentNotificationKeys(uid = currentUser?.uid) {
@@ -7252,38 +7320,249 @@ function persistClearedMediaCommentNotificationKeys() {
   }
 }
 
+function setVideoPreviewNotificationHighlight(comments = []) {
+  clearVideoPreviewNotificationHighlight({ render: false });
+
+  currentVideoPreviewNotificationCommentIds = new Set(
+    comments
+      .map((comment) => String(comment?.id || ""))
+      .filter(Boolean)
+  );
+
+  if (currentVideoPreviewNotificationCommentIds.size === 0) {
+    return;
+  }
+
+  videoPreviewNotificationHighlightTimer = window.setTimeout(() => {
+    videoPreviewNotificationHighlightTimer = 0;
+    currentVideoPreviewNotificationCommentIds = new Set();
+
+    if (videoPreviewModalOpen) {
+      renderVideoPreviewComments(getCurrentVideoPreviewState());
+    }
+  }, COMMENT_NOTIFICATION_HIGHLIGHT_MS);
+}
+
+function clearVideoPreviewNotificationHighlight(options = {}) {
+  if (videoPreviewNotificationHighlightTimer) {
+    window.clearTimeout(videoPreviewNotificationHighlightTimer);
+    videoPreviewNotificationHighlightTimer = 0;
+  }
+
+  if (currentVideoPreviewNotificationCommentIds.size === 0) {
+    return;
+  }
+
+  currentVideoPreviewNotificationCommentIds = new Set();
+
+  if (options.render !== false && videoPreviewModalOpen) {
+    renderVideoPreviewComments(getCurrentVideoPreviewState());
+  }
+}
+
+function consumeMediaCommentNotificationsForPreview(previewState = getCurrentVideoPreviewState()) {
+  const context = buildMediaCommentContext(previewState);
+
+  if (!context) {
+    clearVideoPreviewNotificationHighlight({ render: false });
+    return [];
+  }
+
+  const notifications = getNewMediaCommentNotificationsForItem(
+    previewState.currentItem,
+    context.tripId,
+    context.folderId
+  );
+
+  if (notifications.length === 0) {
+    return [];
+  }
+
+  setVideoPreviewNotificationHighlight(notifications);
+  clearMediaCommentNotifications(notifications, {
+    render: false,
+    preservePreviewHighlight: true,
+  });
+  scheduleInteractionRefresh();
+
+  return notifications;
+}
+
 function getNewMediaCommentNotifications() {
-  const notifications = [];
-  const seenNotificationKeys = new Set();
+  return getMediaCommentNotificationCandidates()
+    .filter((comment) =>
+      comment.tripId &&
+      comment.folderId &&
+      comment.itemId &&
+      !isHighlightFolder(comment.folderId) &&
+      isNewMediaCommentNotification(comment)
+    )
+    .sort(compareFeedEntriesByTime);
+}
 
-  itemsByFolder.forEach((items, cacheKey) => {
-    const [, tripId, folderId] = String(cacheKey || "").split(":");
+function getNewMediaReplyNotifications() {
+  return getMediaReplyNotificationCandidates()
+    .filter((reply) => isNewMediaReplyNotification(reply))
+    .sort(compareFeedEntriesByTime);
+}
 
-    if (!tripId || !folderId || isHighlightFolder(folderId)) {
+function getNewMediaNotifications() {
+  return [...getNewMediaCommentNotifications(), ...getNewMediaReplyNotifications()]
+    .sort(compareFeedEntriesByTime);
+}
+
+function getNewWallPostNotifications() {
+  return getWallPostNotificationCandidates()
+    .filter((entry) => isNewWallPostNotification(entry))
+    .sort(compareFeedEntriesByTime);
+}
+
+function getNewActivityNotifications() {
+  const notificationsByKey = new Map();
+
+  [
+    ...getNewMediaCommentNotifications(),
+    ...getNewMediaReplyNotifications(),
+    ...getNewWallPostNotifications(),
+  ].forEach((entry) => {
+    const notificationKey = buildActivityNotificationKey(entry);
+
+    if (notificationKey && !notificationsByKey.has(notificationKey)) {
+      notificationsByKey.set(notificationKey, entry);
+    }
+  });
+
+  return [...notificationsByKey.values()].sort(compareFeedEntriesByTime);
+}
+
+function getMediaCommentNotificationCandidates() {
+  const candidatesByKey = new Map();
+  const addCandidate = (entry) => {
+    if (entry?.type !== "media-comment") {
       return;
     }
 
-    (items || []).forEach((item) => {
-      getNewMediaCommentNotificationsForItem(item, tripId, folderId).forEach((comment) => {
-        const notificationKey = buildMediaCommentNotificationKey(comment);
+    const comment = normalizeMediaComment(entry);
+    const notificationKey = buildMediaCommentNotificationKey(comment);
 
-        if (!notificationKey || seenNotificationKeys.has(notificationKey)) {
-          return;
-        }
+    if (notificationKey && !candidatesByKey.has(notificationKey)) {
+      candidatesByKey.set(notificationKey, comment);
+    }
+  };
 
-        seenNotificationKeys.add(notificationKey);
-        notifications.push(comment);
-      });
-    });
+  mediaCommentEntriesByItemKey.forEach((comments) => {
+    (comments || []).forEach(addCandidate);
   });
 
-  return notifications.sort(compareFeedEntriesByTime);
+  mediaCommentsByKey.forEach((comments) => {
+    (comments || []).forEach(addCandidate);
+  });
+
+  feedRootActivities.forEach(addCandidate);
+  profileActivityByUser.forEach((entries) => {
+    (entries || []).forEach(addCandidate);
+  });
+
+  return [...candidatesByKey.values()];
+}
+
+function getMediaReplyNotificationCandidates() {
+  const candidatesByKey = new Map();
+  const addCandidate = (entry) => {
+    if (entry?.type !== "thread-reply") {
+      return;
+    }
+
+    const rootEntry = entry.rootEntry || getRootActivityByThread(entry.threadOwnerUid, entry.activityId);
+
+    if (rootEntry?.type !== "media-comment" || isHighlightFolder(rootEntry.folderId)) {
+      return;
+    }
+
+    const reply = normalizeThreadReply({
+      ...entry,
+      rootEntry,
+      tripId: rootEntry.tripId,
+      folderId: rootEntry.folderId,
+      itemId: rootEntry.itemId,
+      itemName: rootEntry.itemName,
+      sourceLabel: rootEntry.sourceLabel,
+    });
+    const notificationKey = buildMediaReplyNotificationKey(reply);
+
+    if (notificationKey && !candidatesByKey.has(notificationKey)) {
+      candidatesByKey.set(notificationKey, {
+        ...reply,
+        rootEntry,
+        tripId: rootEntry.tripId,
+        folderId: rootEntry.folderId,
+        itemId: rootEntry.itemId,
+        itemName: rootEntry.itemName,
+        sourceLabel: rootEntry.sourceLabel,
+      });
+    }
+  };
+
+  feedReplyEntries.forEach(addCandidate);
+  threadRepliesByKey.forEach((replies) => {
+    (replies || []).forEach(addCandidate);
+  });
+
+  return [...candidatesByKey.values()];
+}
+
+function getWallPostNotificationCandidates() {
+  const candidatesByKey = new Map();
+  const addCandidate = (entry) => {
+    if (entry?.type !== "wall-post") {
+      return;
+    }
+
+    const wallPost = normalizeActivityEntry(entry);
+    const notificationKey = buildWallPostNotificationKey(wallPost);
+    const existing = candidatesByKey.get(notificationKey);
+
+    if (
+      notificationKey &&
+      (!existing || shouldPreferWallPostNotificationCandidate(wallPost, existing))
+    ) {
+      candidatesByKey.set(notificationKey, wallPost);
+    }
+  };
+
+  feedRootActivities.forEach(addCandidate);
+  profileActivityByUser.forEach((entries) => {
+    (entries || []).forEach(addCandidate);
+  });
+
+  return [...candidatesByKey.values()];
+}
+
+function shouldPreferWallPostNotificationCandidate(nextEntry, existingEntry) {
+  const nextIsWallOwnerCopy = Boolean(
+    nextEntry.activityOwnerUid && nextEntry.activityOwnerUid === nextEntry.targetUserUid
+  );
+  const existingIsWallOwnerCopy = Boolean(
+    existingEntry.activityOwnerUid && existingEntry.activityOwnerUid === existingEntry.targetUserUid
+  );
+
+  if (nextIsWallOwnerCopy !== existingIsWallOwnerCopy) {
+    return nextIsWallOwnerCopy;
+  }
+
+  return Number(nextEntry.createdAtMs || 0) > Number(existingEntry.createdAtMs || 0);
 }
 
 function getNewMediaCommentNotificationsForTrip(tripId) {
-  return getFoldersForTrip(tripId)
-    .filter((folder) => !isHighlightFolder(folder))
-    .flatMap((folder) => getNewMediaCommentNotificationsForFolder(tripId, folder.id));
+  return getNewMediaCommentNotifications().filter(
+    (comment) => comment.tripId === String(tripId || "")
+  );
+}
+
+function getNewMediaNotificationsForTrip(tripId) {
+  return getNewMediaNotifications().filter(
+    (entry) => entry.tripId === String(tripId || "")
+  );
 }
 
 function getNewMediaCommentNotificationsForFolder(tripId, folderId) {
@@ -7291,8 +7570,23 @@ function getNewMediaCommentNotificationsForFolder(tripId, folderId) {
     return [];
   }
 
-  return getItemsForFolder(tripId, folderId)
-    .flatMap((item) => getNewMediaCommentNotificationsForItem(item, tripId, folderId));
+  return getNewMediaCommentNotifications().filter(
+    (comment) =>
+      comment.tripId === String(tripId || "") &&
+      comment.folderId === String(folderId || "")
+  );
+}
+
+function getNewMediaNotificationsForFolder(tripId, folderId) {
+  if (!tripId || !folderId || isHighlightFolder(folderId)) {
+    return [];
+  }
+
+  return getNewMediaNotifications().filter(
+    (entry) =>
+      entry.tripId === String(tripId || "") &&
+      entry.folderId === String(folderId || "")
+  );
 }
 
 function getNewMediaCommentNotificationsForItem(item, tripId, folderId) {
@@ -7302,9 +7596,38 @@ function getNewMediaCommentNotificationsForItem(item, tripId, folderId) {
     return [];
   }
 
-  const authorUid = getItemAuthorUid(item);
+  const itemKey = buildMediaItemKeyFromItem(item, tripId, folderId);
 
-  if (!authorUid || authorUid !== uid) {
+  if (!itemKey) {
+    return [];
+  }
+
+  return getNewMediaCommentNotifications().filter((comment) =>
+    buildMediaItemKey(comment.tripId, comment.folderId, comment.itemId) === itemKey &&
+    isNewMediaCommentNotification(comment, uid)
+  );
+}
+
+function getNewMediaReplyNotificationsForRoot(entry) {
+  if (entry?.type !== "media-comment") {
+    return [];
+  }
+
+  const threadKey = buildThreadKey(getThreadOwnerUid(entry), String(entry?.id || ""));
+
+  if (!threadKey) {
+    return [];
+  }
+
+  return getNewMediaReplyNotifications().filter(
+    (reply) => buildThreadKey(reply.threadOwnerUid, reply.activityId) === threadKey
+  );
+}
+
+function getNewMediaNotificationsForItem(item, tripId, folderId) {
+  const uid = String(currentUser?.uid || "");
+
+  if (!uid || item?.kind !== "file") {
     return [];
   }
 
@@ -7314,20 +7637,72 @@ function getNewMediaCommentNotificationsForItem(item, tripId, folderId) {
     return [];
   }
 
-  return (mediaCommentEntriesByItemKey.get(itemKey) || []).filter((comment) =>
-    isNewMediaCommentNotification(comment, uid)
+  return getNewMediaNotifications().filter((entry) =>
+    buildMediaItemKey(entry.tripId, entry.folderId, entry.itemId) === itemKey
   );
 }
 
 function isNewMediaCommentNotification(comment, uid = currentUser?.uid) {
   const notificationKey = buildMediaCommentNotificationKey(comment);
-  const authorUid = String(comment?.authorUid || "");
+  const authorUid = getSocialCommentAuthorUid(comment);
+  const userUid = String(uid || "");
 
   return Boolean(
     notificationKey &&
+      userUid &&
       !clearedMediaCommentNotificationKeys.has(notificationKey) &&
-      (!authorUid || authorUid !== String(uid || ""))
+      authorUid &&
+      authorUid !== userUid
   );
+}
+
+function isNewMediaReplyNotification(reply, uid = currentUser?.uid) {
+  const notificationKey = buildMediaReplyNotificationKey(reply);
+  const rootEntry = reply?.rootEntry || getRootActivityByThread(reply?.threadOwnerUid, reply?.activityId);
+  const actorUid = String(reply?.actorUid || "");
+  const userUid = String(uid || "");
+
+  return Boolean(
+    notificationKey &&
+      userUid &&
+      rootEntry?.type === "media-comment" &&
+      actorUid &&
+      actorUid !== userUid &&
+      !clearedMediaCommentNotificationKeys.has(notificationKey)
+  );
+}
+
+function isNewWallPostNotification(entry, uid = currentUser?.uid) {
+  const notificationKey = buildWallPostNotificationKey(entry);
+  const actorUid = String(entry?.actorUid || "");
+  const targetUserUid = String(entry?.targetUserUid || entry?.activityOwnerUid || "");
+  const userUid = String(uid || "");
+
+  return Boolean(
+    notificationKey &&
+      userUid &&
+      targetUserUid === userUid &&
+      !clearedMediaCommentNotificationKeys.has(notificationKey) &&
+      actorUid &&
+      actorUid !== userUid
+  );
+}
+
+function isNewActivityNotification(entry, uid = currentUser?.uid) {
+  if (entry?.type === "media-comment") {
+    return isNewMediaCommentNotification(entry, uid) ||
+      getNewMediaReplyNotificationsForRoot(entry).length > 0;
+  }
+
+  if (entry?.type === "thread-reply") {
+    return isNewMediaReplyNotification(entry, uid);
+  }
+
+  if (entry?.type === "wall-post") {
+    return isNewWallPostNotification(entry, uid);
+  }
+
+  return false;
 }
 
 function clearMediaCommentNotifications(comments = [], options = {}) {
@@ -7335,30 +7710,78 @@ function clearMediaCommentNotifications(comments = [], options = {}) {
     .map((comment) => buildMediaCommentNotificationKey(comment))
     .filter(Boolean);
 
-  if (notificationKeys.length === 0) {
+  clearMediaCommentNotificationKeys(notificationKeys, options);
+}
+
+function clearMediaNotifications(entries = [], options = {}) {
+  const notificationKeys = entries
+    .map((entry) => buildActivityNotificationKey(entry))
+    .filter(Boolean);
+
+  clearMediaCommentNotificationKeys(notificationKeys, options);
+}
+
+function clearActivityNotifications(entries = [], options = {}) {
+  const notificationKeys = entries
+    .map((entry) => buildActivityNotificationKey(entry))
+    .filter(Boolean);
+
+  clearMediaCommentNotificationKeys(notificationKeys, options);
+}
+
+function clearMediaCommentNotificationKeys(notificationKeys = [], options = {}) {
+  const uniqueNotificationKeys = [...new Set(notificationKeys.map(String).filter(Boolean))];
+
+  if (uniqueNotificationKeys.length === 0) {
     return;
   }
 
-  notificationKeys.forEach((key) => {
+  uniqueNotificationKeys.forEach((key) => {
     clearedMediaCommentNotificationKeys.add(key);
   });
   persistClearedMediaCommentNotificationKeys();
+
+  if (options.preservePreviewHighlight !== true) {
+    clearVideoPreviewNotificationHighlight({ render: false });
+  }
+
+  const shouldDelayRender = options.render !== false &&
+    markClearingFeedNotificationCards(uniqueNotificationKeys);
 
   if (options.render === false) {
     syncCommentNotificationControls();
     return;
   }
 
-  renderVisibleRouteContent();
   syncCommentNotificationControls();
+  const finishClearRender = () => {
+    renderVisibleRouteContent();
 
-  if (videoPreviewModalOpen) {
-    renderVideoPreviewComments(getCurrentVideoPreviewState());
+    if (videoPreviewModalOpen) {
+      renderVideoPreviewComments(getCurrentVideoPreviewState());
+    }
+
+    scheduleCommentNotificationViewportObserverSync();
+  };
+
+  if (shouldDelayRender) {
+    window.setTimeout(finishClearRender, COMMENT_NOTIFICATION_FADE_MS);
+    return;
   }
+
+  finishClearRender();
 }
 
 function getNewMediaCommentNotificationCount() {
   return getNewMediaCommentNotifications().length;
+}
+
+function getNewMediaNotificationCount() {
+  return getNewMediaNotifications().length;
+}
+
+function getNewActivityNotificationCount() {
+  return getNewActivityNotifications().length;
 }
 
 function renderNewCommentNotificationBadge(count, options = {}) {
@@ -7368,29 +7791,175 @@ function renderNewCommentNotificationBadge(count, options = {}) {
     return "";
   }
 
-  const label = options.countOnly
-    ? String(total)
+  const label = options.label
+    ? String(options.label)
+    : options.countOnly
+    ? `(${total})`
     : `${total} NEW ${total === 1 ? "COMMENT" : "COMMENTS"}`;
   const extraClass = options.className ? ` ${options.className}` : "";
+  const notificationKeys = getNotificationOptionKeys(options);
+  const notificationAttrs = notificationKeys.length > 0
+    ? renderActivityNotificationAttributes(notificationKeys)
+    : "";
 
-  return `<span class="inline-flex shrink-0 items-center border border-red-200/55 bg-red-500/18 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.5rem] uppercase leading-none tracking-[0.12em] text-red-50 shadow-[0_0_16px_rgba(239,68,68,0.16)]${extraClass}">${escapeHtml(label)}</span>`;
+  return `<span${notificationAttrs} class="inline-flex shrink-0 items-center border border-red-200/55 bg-red-500/18 px-1.5 py-0.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.5rem] uppercase leading-none tracking-[0.12em] text-red-50 shadow-[0_0_16px_rgba(239,68,68,0.16)]${extraClass}">${escapeHtml(label)}</span>`;
+}
+
+function getNotificationOptionKeys(options = {}) {
+  const keys = Array.isArray(options.notificationKeys)
+    ? options.notificationKeys
+    : [options.notificationKey];
+
+  return [...new Set(keys.map(String).filter(Boolean))];
+}
+
+function renderActivityNotificationAttributes(notificationKeys = []) {
+  const keys = [...new Set(notificationKeys.map(String).filter(Boolean))];
+
+  if (keys.length === 0) {
+    return "";
+  }
+
+  const primaryKey = keys[0];
+  const keyList = keys.join("|");
+
+  return ` data-activity-notification="true" data-activity-notification-key="${escapeHtml(primaryKey)}" data-activity-notification-keys="${escapeHtml(keyList)}"`;
+}
+
+function renderFeedNotificationAttributes(notificationKeys = []) {
+  const keys = [...new Set(notificationKeys.map(String).filter(Boolean))];
+
+  if (keys.length === 0) {
+    return "";
+  }
+
+  return ` data-feed-notification-key="${escapeHtml(keys[0])}" data-feed-notification-keys="${escapeHtml(keys.join("|"))}"`;
+}
+
+function renderUnreadMediaCommentNotificationBadge(entry, options = {}) {
+  const notificationKey = buildMediaCommentNotificationKey(entry);
+
+  return entry?.type === "media-comment" && isNewMediaCommentNotification(entry)
+    ? renderNewCommentNotificationBadge(1, {
+        ...options,
+        notificationKey,
+    })
+    : "";
+}
+
+function renderUnreadActivityNotificationBadge(entry, options = {}) {
+  return [
+    renderUnreadDirectActivityNotificationBadge(entry, options),
+    renderUnreadMediaReplyNotificationBadge(entry, options),
+  ].filter(Boolean).join("");
+}
+
+function getActivityNotificationKeysForEntry(entry) {
+  const keys = [];
+
+  if (entry?.type === "media-comment" && isNewMediaCommentNotification(entry)) {
+    keys.push(buildMediaCommentNotificationKey(entry));
+  } else if (entry?.type === "wall-post" && isNewWallPostNotification(entry)) {
+    keys.push(buildWallPostNotificationKey(entry));
+  } else if (entry?.type === "thread-reply" && isNewMediaReplyNotification(entry)) {
+    keys.push(buildMediaReplyNotificationKey(entry));
+  }
+
+  if (entry?.type === "media-comment") {
+    getNewMediaReplyNotificationsForRoot(entry).forEach((reply) => {
+      keys.push(buildMediaReplyNotificationKey(reply));
+    });
+  }
+
+  return [...new Set(keys.filter(Boolean))];
+}
+
+function renderUnreadDirectActivityNotificationBadge(entry, options = {}) {
+  if (entry?.type === "thread-reply") {
+    return "";
+  }
+
+  const notificationKey = buildActivityNotificationKey(entry);
+  const isUnread = entry?.type === "media-comment"
+    ? isNewMediaCommentNotification(entry)
+    : isNewActivityNotification(entry);
+
+  return isUnread && notificationKey
+    ? renderNewCommentNotificationBadge(1, {
+        ...options,
+        notificationKey,
+      })
+    : "";
+}
+
+function renderUnreadMediaReplyNotificationBadge(entry, options = {}) {
+  const notifications = getNewMediaReplyNotificationsForRoot(entry);
+
+  if (notifications.length === 0) {
+    return "";
+  }
+
+  const label = `${notifications.length} NEW ${notifications.length === 1 ? "REPLY" : "REPLIES"}`;
+
+  return renderNewCommentNotificationBadge(notifications.length, {
+    ...options,
+    label,
+    notificationKeys: notifications.map((reply) => buildMediaReplyNotificationKey(reply)),
+  });
+}
+
+function renderNewMediaNotificationBadge(notifications = [], options = {}) {
+  const entries = (notifications || []).filter(Boolean);
+  const total = entries.length;
+
+  if (total === 0) {
+    return "";
+  }
+
+  const commentCount = entries.filter((entry) => entry.type === "media-comment").length;
+  const replyCount = entries.filter((entry) => entry.type === "thread-reply").length;
+  const label = commentCount > 0 && replyCount > 0
+    ? `${total} NEW UPDATES`
+    : replyCount > 0
+      ? `${replyCount} NEW ${replyCount === 1 ? "REPLY" : "REPLIES"}`
+      : `${commentCount} NEW ${commentCount === 1 ? "COMMENT" : "COMMENTS"}`;
+
+  return renderNewCommentNotificationBadge(total, {
+    ...options,
+    label,
+  });
+}
+
+function renderFeedScopeCountMarkup(countLabel, notificationCount = getNewActivityNotificationCount()) {
+  return `${escapeHtml(countLabel)}${renderNewCommentNotificationBadge(notificationCount, {
+    countOnly: true,
+    className: "ml-2 min-w-5 justify-center px-1.5 py-1 text-[0.5rem]",
+  })}`;
 }
 
 function syncCommentNotificationControls() {
-  const count = getNewMediaCommentNotificationCount();
+  const mediaCommentCount = getNewMediaNotificationCount();
+  const activityCount = getNewActivityNotificationCount();
 
-  syncActivityNotificationButtons(count);
+  syncActivityNotificationButtons(activityCount);
 
-  if (clearCommentNotificationsButton) {
-    clearCommentNotificationsButton.classList.toggle("hidden", count <= 0);
-    clearCommentNotificationsButton.disabled = count <= 0;
-    clearCommentNotificationsButton.textContent = count > 0
-      ? `Clear All ${count}`
-      : "Clear All";
-  }
+  syncNotificationClearButton(clearCommentNotificationsButton, mediaCommentCount);
+  syncNotificationClearButton(clearFeedCommentNotificationsButton, activityCount);
 }
 
-function syncActivityNotificationButtons(count = getNewMediaCommentNotificationCount()) {
+function syncNotificationClearButton(button, count = 0) {
+  if (!button) {
+    return;
+  }
+
+  button.classList.toggle("hidden", count <= 0);
+  button.disabled = count <= 0;
+  button.textContent = count > 0
+    ? `Clear All ${count}`
+    : "Clear All";
+}
+
+function syncActivityNotificationButtons(count = getNewActivityNotificationCount()) {
   const badgeMarkup = renderNewCommentNotificationBadge(count, {
     countOnly: true,
     className: "ml-2 min-w-5 justify-center px-1.5 py-1 text-[0.54rem]",
@@ -7403,6 +7972,175 @@ function syncActivityNotificationButtons(count = getNewMediaCommentNotificationC
       button.innerHTML = content;
     }
   });
+}
+
+function markClearingFeedNotificationCards(notificationKeys = []) {
+  const keys = new Set(notificationKeys.map(String).filter(Boolean));
+
+  if (keys.size === 0) {
+    return false;
+  }
+
+  let marked = false;
+
+  keys.forEach((key) => {
+    getFeedNotificationCardElements(key).forEach((card) => {
+      marked = true;
+      card.style.transition = `border-color ${COMMENT_NOTIFICATION_FADE_MS}ms ease, background-color ${COMMENT_NOTIFICATION_FADE_MS}ms ease, box-shadow ${COMMENT_NOTIFICATION_FADE_MS}ms ease`;
+      card.style.borderColor = "rgba(255,255,255,0.1)";
+      card.style.backgroundColor = "rgba(0,0,0,0.24)";
+      card.style.boxShadow = "none";
+
+      getActivityNotificationElementsForKeys([key], card)
+        .forEach((badge) => {
+          badge.style.transition = `opacity ${COMMENT_NOTIFICATION_FADE_MS}ms ease`;
+          badge.style.opacity = "0";
+        });
+    });
+  });
+
+  return marked;
+}
+
+function getFeedNotificationCardElements(notificationKey) {
+  if (!notificationKey) {
+    return [];
+  }
+
+  return Array.from(document.querySelectorAll("[data-feed-notification-key], [data-feed-notification-keys]"))
+    .filter((card) => getNotificationKeysFromElement(card, "feed").includes(notificationKey));
+}
+
+function scheduleCommentNotificationViewportObserverSync() {
+  if (commentNotificationViewportSyncFrame) {
+    return;
+  }
+
+  commentNotificationViewportSyncFrame = window.requestAnimationFrame(() => {
+    commentNotificationViewportSyncFrame = 0;
+    syncCommentNotificationViewportObserver();
+  });
+}
+
+function syncCommentNotificationViewportObserver() {
+  if (commentNotificationViewportObserver) {
+    commentNotificationViewportObserver.disconnect();
+  }
+
+  const notificationElements = Array.from(
+    document.querySelectorAll("[data-activity-notification='true']")
+  );
+
+  if (!currentUser?.uid || notificationElements.length === 0 || typeof IntersectionObserver !== "function") {
+    return;
+  }
+
+  commentNotificationViewportObserver = new IntersectionObserver(
+    handleCommentNotificationViewportEntries,
+    {
+      root: null,
+      threshold: 0.65,
+    }
+  );
+
+  notificationElements.forEach((element) => {
+    commentNotificationViewportObserver.observe(element);
+  });
+}
+
+function handleCommentNotificationViewportEntries(entries) {
+  entries.forEach((entry) => {
+    if (!entry.isIntersecting || entry.intersectionRatio < 0.65) {
+      return;
+    }
+
+    const notificationKeys = getNotificationKeysFromElement(entry.target, "activity")
+      .filter((key) => !clearedMediaCommentNotificationKeys.has(key));
+
+    if (notificationKeys.length === 0) {
+      return;
+    }
+
+    commentNotificationViewportObserver?.unobserve(entry.target);
+    scheduleViewportCommentNotificationClear(notificationKeys);
+  });
+}
+
+function scheduleViewportCommentNotificationClear(notificationKeys) {
+  const keys = Array.isArray(notificationKeys)
+    ? notificationKeys.map(String).filter(Boolean)
+    : [String(notificationKeys || "")].filter(Boolean);
+  const timerKey = keys.slice().sort().join("|");
+
+  if (!timerKey || commentNotificationViewportClearTimers.has(timerKey)) {
+    return;
+  }
+
+  const timer = window.setTimeout(() => {
+    commentNotificationViewportClearTimers.delete(timerKey);
+
+    if (!areActivityNotificationKeysVisible(keys)) {
+      scheduleCommentNotificationViewportObserverSync();
+      return;
+    }
+
+    clearMediaCommentNotificationKeys(keys);
+  }, COMMENT_NOTIFICATION_VIEWPORT_CLEAR_MS);
+
+  commentNotificationViewportClearTimers.set(timerKey, timer);
+}
+
+function getNotificationKeysFromElement(element, namespace = "activity") {
+  if (!element) {
+    return [];
+  }
+
+  const listAttribute = namespace === "feed"
+    ? "data-feed-notification-keys"
+    : "data-activity-notification-keys";
+  const keyAttribute = namespace === "feed"
+    ? "data-feed-notification-key"
+    : "data-activity-notification-key";
+  const listValue = String(element.getAttribute(listAttribute) || "");
+  const singleValue = String(element.getAttribute(keyAttribute) || "");
+
+  return [...new Set(
+    [
+      ...listValue.split("|"),
+      singleValue,
+    ].map((key) => key.trim()).filter(Boolean)
+  )];
+}
+
+function getActivityNotificationElementsForKeys(notificationKeys = [], root = document) {
+  const keySet = new Set(notificationKeys.map(String).filter(Boolean));
+
+  if (keySet.size === 0) {
+    return [];
+  }
+
+  return Array.from(root.querySelectorAll("[data-activity-notification='true']"))
+    .filter((element) => getNotificationKeysFromElement(element, "activity").some((key) => keySet.has(key)));
+}
+
+function areActivityNotificationKeysVisible(notificationKeys = []) {
+  return getActivityNotificationElementsForKeys(notificationKeys).some(isElementMostlyInViewport);
+}
+
+function isElementMostlyInViewport(element) {
+  if (!element || typeof element.getBoundingClientRect !== "function") {
+    return false;
+  }
+
+  const rect = element.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  const visibleWidth = Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0);
+  const visibleHeight = Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0);
+  const visibleArea = Math.max(0, visibleWidth) * Math.max(0, visibleHeight);
+  const totalArea = Math.max(1, rect.width * rect.height);
+
+  return visibleArea / totalArea >= 0.65;
 }
 
 function buildMediaCommentLikeKey(tripId, folderId, itemId, commentId) {
@@ -7565,6 +8303,8 @@ function renderVideoPreviewComments(previewState = getCurrentVideoPreviewState()
         : renderEmptySocialState("NO COMMENTS YET.");
   }
 
+  scheduleCommentNotificationViewportObserverSync();
+
   renderVideoPreviewInteractionBar(previewState);
   renderVideoPreviewThreadPanel(previewState);
 
@@ -7715,6 +8455,10 @@ function renderMediaComment(comment, options = {}) {
   const interactionMarkup = renderSocialInteractionBar(comment, { includeReplyCount: false });
   const highlighted = isHighlightedPreviewComment(comment);
   const highlightAttrs = highlighted ? ' data-new-comment="true"' : "";
+  const headerMetaMarkup = [
+    highlighted ? renderNewCommentNotificationBadge(1, { label: "NEW" }) : "",
+    renderUnreadMediaReplyNotificationBadge(comment),
+  ].filter(Boolean).join("");
   const replyButtonMarkup = context.threadOwnerUid && context.activityId
     ? `
       <div class="mt-3">
@@ -7731,8 +8475,10 @@ function renderMediaComment(comment, options = {}) {
     : "";
   return renderSocialEntryCard(comment, {
     articleAttrs: `data-media-comment-id="${escapeHtml(comment.id)}"${highlightAttrs}`,
-    cardClass: highlighted ? "ring-1 ring-red-300/55 bg-red-500/[0.08]" : "",
-    headerMetaMarkup: highlighted ? renderNewCommentNotificationBadge(1) : "",
+    cardClass: highlighted || getNewMediaReplyNotificationsForRoot(comment).length > 0
+      ? "ring-1 ring-red-300/55 bg-red-500/[0.08]"
+      : "",
+    headerMetaMarkup,
     controlsMarkup: renderSocialEntryTypeControls(comment),
     bodyMarkup: renderEditableSocialEntryContent(comment),
     interactionMarkup,
@@ -7780,7 +8526,11 @@ function syncProfileActivitySubscription(userId) {
       profileActivityByUser.set(
         nextUserId,
         snapshot.docs.map((activityDoc) =>
-          normalizeActivityEntry({ id: activityDoc.id, ...activityDoc.data() })
+          normalizeActivityEntry({
+            id: activityDoc.id,
+            activityOwnerUid: nextUserId,
+            ...activityDoc.data(),
+          })
         )
       );
       const profileView = getActiveProfileView();
@@ -7821,6 +8571,8 @@ function renderProfileActivityPanel(friend, isReady, isSelf, profileView = null)
         : renderEmptySocialState("NO WALL ACTIVITY YET.");
   }
 
+  scheduleCommentNotificationViewportObserverSync();
+
   if (!isReady) {
     setProfileActivityStatus(getProfileActivityPlaceholder(profileView));
     return;
@@ -7852,6 +8604,7 @@ function getProfileActivityPlaceholder(profileView) {
 
 function renderActivityEntry(entry, profileFriend, isSelf = false) {
   const actionLabel = buildActivityActionLabel(entry, profileFriend, isSelf);
+  const notificationMarkup = renderUnreadActivityNotificationBadge(entry, { label: "NEW" });
   const articleActionAttrs = entry.type === "media-comment"
     ? renderActivitySourceAttributes(entry)
     : entry.type === "wall-post"
@@ -7868,6 +8621,7 @@ function renderActivityEntry(entry, profileFriend, isSelf = false) {
         ? "Open wall post thread"
         : "",
     controlsMarkup: renderSocialEntryTypeControls(entry),
+    headerMetaMarkup: notificationMarkup,
     actionLabel,
     bodyMarkup: renderEditableSocialEntryContent(entry),
     interactionMarkup,
@@ -8174,10 +8928,16 @@ function renderThreadRootEntry(entry, options = {}) {
   const interactionMarkup = renderSocialInteractionBar(entry, { includeReplyCount: false });
   const highlighted = isHighlightedPreviewComment(entry);
   const highlightAttrs = highlighted ? ' data-new-comment="true"' : "";
+  const headerMetaMarkup = [
+    highlighted ? renderNewCommentNotificationBadge(1, { label: "NEW" }) : "",
+    renderUnreadMediaReplyNotificationBadge(entry),
+  ].filter(Boolean).join("");
   return renderSocialEntryCard(entry, {
     articleAttrs: `data-thread-root-entry="${escapeHtml(entry.id)}"${highlightAttrs}`,
-    cardClass: highlighted ? "ring-1 ring-red-300/55 bg-red-500/[0.08]" : "",
-    headerMetaMarkup: highlighted ? renderNewCommentNotificationBadge(1) : "",
+    cardClass: highlighted || getNewMediaReplyNotificationsForRoot(entry).length > 0
+      ? "ring-1 ring-red-300/55 bg-red-500/[0.08]"
+      : "",
+    headerMetaMarkup,
     controlsMarkup: renderSocialEntryTypeControls(entry),
     actionLabel,
     bodyMarkup: renderEditableSocialEntryContent(entry),
@@ -11354,7 +12114,10 @@ function renderFeedPage() {
   );
 
   if (feedAllCount) {
-    feedAllCount.textContent = buildCountLabel(allEntries.length, "ITEM");
+    feedAllCount.innerHTML = renderFeedScopeCountMarkup(
+      buildCountLabel(allEntries.length, "ITEM"),
+      getNewActivityNotificationCount()
+    );
   }
 
   if (feedYourCount) {
@@ -11367,6 +12130,7 @@ function renderFeedPage() {
       : renderEmptySocialState(emptyMessage);
   }
 
+  scheduleCommentNotificationViewportObserverSync();
 }
 
 function setFeedStatus(message) {
@@ -11667,6 +12431,14 @@ function renderRootFeedEntry(entry, scope = "all") {
     : "";
   const wallTargetLinkMarkup = entry.type === "wall-post" ? renderWallTargetLink(entry) : "";
   const interactionMarkup = renderSocialInteractionBar(entry);
+  const notificationKeys = getActivityNotificationKeysForEntry(entry);
+  const unreadActivityNotification = notificationKeys.length > 0;
+  const headerMetaMarkup = [
+    scope === "yours" ? `<span class="text-sky-100/62">YOUR ACTIVITY</span>` : "",
+    renderUnreadActivityNotificationBadge(entry, { label: "NEW" }),
+  ]
+    .filter(Boolean)
+    .join("");
   const articleAttrs = entry.type === "media-comment"
     ? renderActivitySourceAttributes(entry)
     : entry.type === "wall-post"
@@ -11677,15 +12449,18 @@ function renderRootFeedEntry(entry, scope = "all") {
     : buildActivityActionLabel(entry, getFriendByUid(entry.targetUserUid), entry.targetUserUid === currentUser?.uid);
 
   return renderSocialEntryCard(entry, {
-    articleAttrs,
+    articleAttrs: `${articleAttrs}${unreadActivityNotification ? renderFeedNotificationAttributes(notificationKeys) : ""}`,
     interactive: entry.type === "media-comment" || entry.type === "wall-post",
     title: entry.type === "media-comment"
       ? "Open source item and thread"
       : entry.type === "wall-post"
         ? "Open wall post thread"
         : "",
+    cardClass: unreadActivityNotification
+      ? "border-red-300/38 bg-red-500/[0.07] shadow-[0_0_0_1px_rgba(248,113,113,0.08),0_18px_44px_rgba(127,29,29,0.08)]"
+      : "",
     controlsMarkup: renderSocialEntryTypeControls(entry),
-    headerMetaMarkup: scope === "yours" ? `<span class="text-sky-100/62">YOUR ACTIVITY</span>` : "",
+    headerMetaMarkup,
     actionLabel,
     bodyMarkup: renderEditableSocialEntryContent(entry),
     secondaryMarkup: sourceCardMarkup,
@@ -11702,9 +12477,10 @@ function renderUploadFeedEntry(entry) {
   );
   const previewUrl = getFeedItemPreviewUrl(entry.item);
   const sourceAttrs = renderActivitySourceAttributes({ ...entry, id: "" });
+  const articleAttrs = `${sourceAttrs} title="Open uploaded media"`;
 
   return `
-    <article class="border border-white/10 bg-black/24 p-3 sm:p-4">
+    <article ${articleAttrs} class="cursor-pointer border border-white/10 bg-black/24 p-3 transition hover:border-white/22 hover:bg-black/32 sm:p-4">
       <div class="flex items-start gap-3">
         <img src="${escapeHtml(getSocialPhotoUrl(entry.actorPhotoURL))}" alt="${escapeHtml(entry.actorLabel)}" class="h-10 w-10 shrink-0 border border-white/10 bg-black object-cover object-center">
         <div class="min-w-0 flex-1">
@@ -12616,7 +13392,7 @@ function renderTripSection(trip, index, { view = "archive", profileFriend = null
   const tripCoverMarkup = renderTripCoverMarkup(trip, expanded);
   const tripStatusTagMarkup = renderTripStatusTag(trip);
   const tripNotificationMarkup = !isProfileView
-    ? renderNewCommentNotificationBadge(getNewMediaCommentNotificationsForTrip(trip.id).length)
+    ? renderNewMediaNotificationBadge(getNewMediaNotificationsForTrip(trip.id))
     : "";
   const tripSettingsMarkup = !isProfileView && adminMode ? renderTripSettingsMenu(trip) : "";
   const shellClass = isProfileView
@@ -12768,8 +13544,8 @@ function renderTripFolderButtons(trip, folders, selectedFolderId, view = "archiv
         : getItemsForFolder(trip.id, folder.id);
       const notificationMarkup = view === "profile"
         ? ""
-        : renderNewCommentNotificationBadge(
-            getNewMediaCommentNotificationsForFolder(trip.id, folder.id).length,
+        : renderNewMediaNotificationBadge(
+            getNewMediaNotificationsForFolder(trip.id, folder.id),
             { className: "whitespace-nowrap" }
           );
       const buttonStyle = highlightFolder
@@ -12785,7 +13561,7 @@ function renderTripFolderButtons(trip, folders, selectedFolderId, view = "archiv
       const labelStyleAttribute = highlightTextStyle ? ` style="${highlightTextStyle}"` : "";
       const countStyleAttribute = highlightTextStyle ? ` style="${highlightTextStyle}"` : "";
       const labelMarkup = `<span class="hidden lg:inline${labelToneClass}"${labelStyleAttribute}>${escapeHtml(shortLabel)}</span><span class="lg:hidden${labelToneClass}"${labelStyleAttribute}>${escapeHtml(fullLabel)}</span>`;
-      const countMarkup = `<span class="flex shrink-0 items-center gap-1.5"><span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] tracking-[0.16em] ${countToneClass}"${countStyleAttribute}>${escapeHtml(String(folderItems.length))}</span>${notificationMarkup}</span>`;
+      const countMarkup = `<span class="flex shrink-0 items-center gap-1.5">${notificationMarkup}<span class="font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.62rem] tracking-[0.16em] ${countToneClass}"${countStyleAttribute}>${escapeHtml(String(folderItems.length))}</span></span>`;
 
       return `
         <button
@@ -12976,8 +13752,8 @@ function renderItemRows(items, tripId, folderId, view = "archive", options = {})
       const source = renderItemSource(tripId, sourceFolderId, { muted: viewedRecently });
       const author = renderItemAuthor(item, { muted: viewedRecently });
       const certified = renderItemCertified(item, { muted: viewedRecently });
-      const notificationMarkup = renderNewCommentNotificationBadge(
-        getNewMediaCommentNotificationsForItem(item, tripId, sourceFolderId).length,
+      const notificationMarkup = renderNewMediaNotificationBadge(
+        getNewMediaNotificationsForItem(item, tripId, sourceFolderId),
         { className: "mt-1.5" }
       );
       const meta = renderItemMeta(item, tripId, sourceFolderId, {
@@ -13070,8 +13846,8 @@ function renderMobileItemCard(item, tripId, folderId, view = "archive", options 
         sourceLabel
       )}</span>`
     : "";
-  const notificationMarkup = renderNewCommentNotificationBadge(
-    getNewMediaCommentNotificationsForItem(item, tripId, sourceFolderId).length,
+  const notificationMarkup = renderNewMediaNotificationBadge(
+    getNewMediaNotificationsForItem(item, tripId, sourceFolderId),
     { className: "mt-1" }
   );
 
