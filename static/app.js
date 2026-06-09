@@ -303,9 +303,13 @@ const videoPreviewPlayer = document.getElementById("video-preview-player");
 const videoPreviewImage = document.getElementById("video-preview-image");
 const videoPreviewNavigationAnchor = document.getElementById("video-preview-navigation-anchor");
 const videoPreviewNavigationShell = document.getElementById("video-preview-navigation-shell");
+const videoPreviewFloatingNavigation = document.getElementById("video-preview-floating-navigation");
 const videoPreviewPrevButton = document.getElementById("video-preview-prev-button");
 const videoPreviewNextButton = document.getElementById("video-preview-next-button");
 const videoPreviewCertifyButton = document.getElementById("video-preview-certify-button");
+const videoPreviewFloatingPrevButton = document.getElementById("video-preview-floating-prev-button");
+const videoPreviewFloatingNextButton = document.getElementById("video-preview-floating-next-button");
+const videoPreviewFloatingCertifyButton = document.getElementById("video-preview-floating-certify-button");
 const videoPreviewUpNext = document.getElementById("video-preview-up-next");
 const videoPreviewAutoplayToggle = document.getElementById("video-preview-autoplay-toggle");
 const videoPreviewAutoplayTimerLabel = document.getElementById("video-preview-autoplay-timer");
@@ -1614,6 +1618,9 @@ function setupForms() {
   videoPreviewBackdrop?.addEventListener("click", resetVideoPreview);
   videoPreviewPrevButton?.addEventListener("click", () => navigateVideoPreview(-1, { manual: true }));
   videoPreviewNextButton?.addEventListener("click", () => navigateVideoPreview(1, { manual: true }));
+  videoPreviewFloatingPrevButton?.addEventListener("click", () => videoPreviewPrevButton?.click());
+  videoPreviewFloatingNextButton?.addEventListener("click", () => videoPreviewNextButton?.click());
+  videoPreviewFloatingCertifyButton?.addEventListener("click", () => videoPreviewCertifyButton?.click());
   videoPreviewShell?.addEventListener("scroll", scheduleVideoPreviewNavigationSync, { passive: true });
   videoPreviewCertifyButton?.addEventListener("click", handleVideoPreviewCertifiedToggleClick);
   videoPreviewAutoplayToggle?.addEventListener("change", handleVideoPreviewAutoplayToggleChange);
@@ -2252,18 +2259,18 @@ function scheduleVideoPreviewNavigationSync() {
 
 function syncVideoPreviewNavigationPosition() {
   if (!shouldUseFloatingVideoPreviewNavigation()) {
-    setVideoPreviewNavigationFloating(false);
+    setFloatingVideoPreviewNavigationVisible(false);
     return;
   }
 
-  const navRect = videoPreviewNavigationShell.getBoundingClientRect();
-  const navHeight = Math.ceil(navRect.height || 0);
+  const floatingRect = videoPreviewFloatingNavigation.getBoundingClientRect();
+  const navHeight = Math.ceil(floatingRect.height || videoPreviewNavigationShell.getBoundingClientRect().height || 0);
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
   const anchorRect = videoPreviewNavigationAnchor.getBoundingClientRect();
   const bottomGap = 8;
   const shouldFloat = anchorRect.top > viewportHeight - navHeight - bottomGap;
 
-  setVideoPreviewNavigationFloating(shouldFloat, navHeight);
+  setFloatingVideoPreviewNavigationVisible(shouldFloat);
 }
 
 function shouldUseFloatingVideoPreviewNavigation() {
@@ -2272,42 +2279,19 @@ function shouldUseFloatingVideoPreviewNavigation() {
       videoPreviewShell &&
       videoPreviewNavigationAnchor &&
       videoPreviewNavigationShell &&
+      videoPreviewFloatingNavigation &&
       window.matchMedia("(max-width: 639px)").matches
   );
 }
 
-function setVideoPreviewNavigationFloating(floating, navHeight = 0) {
-  if (!videoPreviewNavigationShell || !videoPreviewNavigationAnchor) {
+function setFloatingVideoPreviewNavigationVisible(visible) {
+  if (!videoPreviewFloatingNavigation) {
     return;
   }
 
-  if (!floating) {
-    videoPreviewNavigationAnchor.style.height = "";
-    videoPreviewNavigationShell.removeAttribute("data-floating");
-    videoPreviewNavigationShell.style.position = "";
-    videoPreviewNavigationShell.style.left = "";
-    videoPreviewNavigationShell.style.right = "";
-    videoPreviewNavigationShell.style.bottom = "";
-    videoPreviewNavigationShell.style.width = "";
-    videoPreviewNavigationShell.style.zIndex = "";
-    videoPreviewNavigationShell.style.marginTop = "";
-    return;
-  }
-
-  const shellRect = videoPreviewShell.getBoundingClientRect();
-  const inset = 12;
-  const left = Math.max(shellRect.left + inset, inset);
-  const width = Math.max(shellRect.width - inset * 2, 0);
-
-  videoPreviewNavigationAnchor.style.height = `${Math.max(navHeight, 0)}px`;
-  videoPreviewNavigationShell.setAttribute("data-floating", "true");
-  videoPreviewNavigationShell.style.position = "fixed";
-  videoPreviewNavigationShell.style.left = `${left}px`;
-  videoPreviewNavigationShell.style.right = "auto";
-  videoPreviewNavigationShell.style.bottom = "calc(env(safe-area-inset-bottom) + 0.5rem)";
-  videoPreviewNavigationShell.style.width = `${width}px`;
-  videoPreviewNavigationShell.style.zIndex = "70";
-  videoPreviewNavigationShell.style.marginTop = "0";
+  videoPreviewFloatingNavigation.classList.toggle("hidden", !visible);
+  videoPreviewFloatingNavigation.classList.toggle("flex", visible);
+  videoPreviewFloatingNavigation.setAttribute("aria-hidden", visible ? "false" : "true");
 }
 
 function setThreadModalOpen(nextOpen) {
@@ -6958,7 +6942,35 @@ function syncVideoPreviewNavigation(previewState = getCurrentVideoPreviewState()
     videoPreviewNextButton.disabled = !hasNextEntry;
   }
 
+  syncFloatingVideoPreviewNavigationButtons();
   scheduleVideoPreviewNavigationSync();
+}
+
+function syncFloatingVideoPreviewNavigationButtons() {
+  if (videoPreviewFloatingPrevButton && videoPreviewPrevButton) {
+    videoPreviewFloatingPrevButton.disabled = videoPreviewPrevButton.disabled;
+  }
+
+  if (videoPreviewFloatingNextButton && videoPreviewNextButton) {
+    videoPreviewFloatingNextButton.disabled = videoPreviewNextButton.disabled;
+  }
+
+  if (videoPreviewFloatingCertifyButton && videoPreviewCertifyButton) {
+    const certified = videoPreviewCertifyButton.textContent.trim() === "Uncertify";
+    const hidden = videoPreviewCertifyButton.classList.contains("hidden");
+    const baseClass = "min-h-9 min-w-0 flex-1 shrink border px-2 py-1.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.56rem] uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-40";
+    const toneClass = certified
+      ? "border-sky-300/32 bg-sky-100/[0.1] text-sky-100 hover:border-sky-200/55 hover:bg-sky-100/[0.16]"
+      : "border-amber-200/35 bg-amber-100/[0.12] text-amber-50 hover:border-amber-100/55 hover:bg-amber-100/[0.18]";
+
+    videoPreviewFloatingCertifyButton.className = `${hidden ? "hidden " : ""}${baseClass} ${toneClass}`;
+    videoPreviewFloatingCertifyButton.disabled = videoPreviewCertifyButton.disabled;
+    videoPreviewFloatingCertifyButton.textContent = videoPreviewCertifyButton.textContent;
+    videoPreviewFloatingCertifyButton.setAttribute(
+      "aria-label",
+      videoPreviewCertifyButton.getAttribute("aria-label") || videoPreviewFloatingCertifyButton.textContent
+    );
+  }
 }
 
 function syncVideoPreviewMedia(previewState = getCurrentVideoPreviewState()) {
@@ -9913,7 +9925,7 @@ function syncVideoPreviewCertification(previewState = getCurrentVideoPreviewStat
   }
 
   if (videoPreviewCertifyButton) {
-    const certifyButtonClass = "min-h-9 shrink-0 px-2 py-1.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 sm:px-3 sm:py-2 sm:text-[0.66rem] sm:tracking-[0.18em]";
+    const certifyButtonClass = "min-h-9 min-w-0 flex-1 shrink px-2 py-1.5 font-['Cascadia_Mono','JetBrains_Mono',Consolas,monospace] text-[0.58rem] uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-0 sm:flex-none sm:px-3 sm:py-2 sm:text-[0.66rem] sm:tracking-[0.18em]";
     const certifyGoldClass = `${certifyButtonClass} border border-amber-200/35 bg-amber-100/[0.07] text-amber-50 hover:border-amber-100/55 hover:bg-amber-100/[0.12]`;
     const uncertifyIceClass = `${certifyButtonClass} border border-sky-300/32 bg-sky-100/[0.03] text-sky-100 hover:border-sky-200/55 hover:bg-sky-100/[0.08]`;
     videoPreviewCertifyButton.disabled = false;
