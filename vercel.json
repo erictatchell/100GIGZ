@@ -15,6 +15,10 @@
       "use": "@vercel/static"
     },
     {
+      "src": "public/**",
+      "use": "@vercel/static"
+    },
+    {
       "src": "static/**",
       "use": "@vercel/static"
     },
@@ -33,11 +37,15 @@
       "destination": "/api/$1.js"
     },
     {
+      "source": "/.well-known/:path*",
+      "destination": "/public/.well-known/:path*"
+    },
+    {
       "source": "/404",
       "destination": "/404.html"
     },
     {
-      "source": "/((?!api/|static/|assets/).*)",
+      "source": "/((?!api/|public/|static/|assets/|\\.well-known/).*)",
       "destination": "/index.html"
     }
   ]
