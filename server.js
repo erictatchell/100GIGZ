@@ -5,6 +5,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const workspaceRoot = process.cwd();
+const publicRoot = path.join(workspaceRoot, "public");
+const staticRoot = existsSync(path.join(publicRoot, "index.html")) ? publicRoot : workspaceRoot;
 const envPath = path.join(workspaceRoot, ".env");
 
 loadEnvFile(envPath);
@@ -243,11 +245,11 @@ function shouldServeSpaShell(pathname) {
 
 function resolveStaticPath(pathname) {
   const relativePath = pathname === "/" ? "/index.html" : pathname;
-  const absolutePath = path.resolve(workspaceRoot, `.${relativePath}`);
+  const absolutePath = path.resolve(staticRoot, `.${relativePath}`);
 
   if (
-    absolutePath !== workspaceRoot &&
-    !absolutePath.startsWith(`${workspaceRoot}${path.sep}`)
+    absolutePath !== staticRoot &&
+    !absolutePath.startsWith(`${staticRoot}${path.sep}`)
   ) {
     return null;
   }

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>100GIGZ</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.ico">
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      background: #0a0a0a;
+      color: #f5f5f4;
+      font-family: "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.84);
+    }
+
+    .loading-text {
+      font-family: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+      font-size: clamp(0.92rem, 1.2vw, 1rem);
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: #f5f5f4;
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-screen">
+    <p class="loading-text">&gt; LOADING...</p>
+  </div>
+</body>
+</html>
