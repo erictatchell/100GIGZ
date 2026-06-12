@@ -215,6 +215,10 @@ test("vault password input avoids mobile focus zoom", async () => {
   assert.match(html, /id="vault-password-input"[^>]*sm:text-\[0\.72rem\]/);
   assert.match(html, /html\.vault-keyboard-active #vault-access-panel/);
   assert.match(appSource, /function updateVaultKeyboardLift\(\)/);
+  assert.match(appSource, /let vaultPasswordFocusIntent = false/);
+  assert.match(appSource, /focus && enabled && !shouldUseVaultKeyboardLift\(\)/);
+  assert.match(appSource, /const minimumLift = 28/);
+  assert.match(appSource, /const maximumLift = 72/);
   assert.match(appSource, /visualViewport\?\.addEventListener\("resize", updateVaultKeyboardLift\)/);
 });
 
