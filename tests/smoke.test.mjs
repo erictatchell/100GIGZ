@@ -25,6 +25,54 @@ import {
 } from "../public/static/modules/core/utils.js";
 
 const readText = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+const getFunctionSource = (source, functionName) => {
+  const start = source.indexOf(`function ${functionName}`);
+  assert.notEqual(start, -1, `${functionName} should exist`);
+
+  const paramsStart = source.indexOf("(", start);
+  assert.notEqual(paramsStart, -1, `${functionName} should declare parameters`);
+
+  let paramsDepth = 0;
+  let signatureEnd = -1;
+
+  for (let index = paramsStart; index < source.length; index += 1) {
+    const character = source[index];
+
+    if (character === "(") {
+      paramsDepth += 1;
+    } else if (character === ")") {
+      paramsDepth -= 1;
+
+      if (paramsDepth === 0) {
+        signatureEnd = index;
+        break;
+      }
+    }
+  }
+
+  assert.notEqual(signatureEnd, -1, `${functionName} signature should be balanced`);
+
+  const bodyStart = source.indexOf("{", signatureEnd);
+  assert.notEqual(bodyStart, -1, `${functionName} should have a body`);
+
+  let depth = 0;
+
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const character = source[index];
+
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  assert.fail(`${functionName} body should be balanced`);
+};
 const publicPageChecks = [
   {
     path: "/about",
@@ -176,6 +224,49 @@ test("critical delegated actions remain present in rendered/static source", asyn
     "role-select",
   ]) {
     assert.match(source, new RegExp(`data-action=["']${action}["']`), `${action} should be rendered`);
+  }
+});
+
+test("profile writes repair required user identity fields", async () => {
+  const appSource = await readText("public/static/app.js");
+  const payloadHelper = getFunctionSource(appSource, "buildUserRecordPayload");
+
+  for (const fieldName of [
+    "uid",
+    "email",
+    "displayName",
+    "googleName",
+    "routeId",
+    "photoURL",
+    "photoStoragePath",
+    "role",
+    "isAdmin",
+  ]) {
+    assert.match(
+      payloadHelper,
+      new RegExp(`\\b${fieldName}\\s*(?::|,)`),
+      `${fieldName} should be included`
+    );
+  }
+
+  for (const functionName of [
+    "handleProfileImageSubmit",
+    "handleProfileDetailsSubmit",
+    "handleRoleSelectChange",
+    "handleFriendDisplayNameEditClick",
+  ]) {
+    const functionSource = getFunctionSource(appSource, functionName);
+
+    assert.match(
+      functionSource,
+      /buildUserRecordPayload/,
+      `${functionName} should write a complete user payload`
+    );
+    assert.match(
+      functionSource,
+      /resolveWritableUserRouteId|resolveSelfProfileRouteId/,
+      `${functionName} should repair missing or duplicate route IDs before writing`
+    );
   }
 });
 

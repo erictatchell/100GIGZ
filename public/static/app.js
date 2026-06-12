@@ -3017,23 +3017,25 @@ async function handleProfileImageSubmit(event) {
 
     const downloadURL = await getDownloadURL(task.snapshot.ref);
     const previousPath = String(currentUserProfile?.photoStoragePath || "");
+    const routeId = await resolveWritableUserRouteId(currentUserProfile, currentUser.uid);
+    const nextProfileData = buildUserRecordPayload(currentUserProfile, {
+      uid: currentUser.uid,
+      email: currentUser.email || currentUserProfile?.email || "",
+      displayName: normalizeDisplayName(currentUserProfile?.displayName),
+      googleName:
+        currentUserProfile?.googleName ||
+        currentUser.displayName ||
+        inferNameFromEmail(currentUser.email),
+      routeId,
+      photoURL: downloadURL,
+      photoStoragePath: storagePath,
+      role: getCurrentUserRole(),
+    });
 
     await setDoc(
       doc(db, runtimeConfig.collections.users, currentUser.uid),
       {
-        uid: currentUser.uid,
-        email: currentUser.email || "",
-        displayName: normalizeDisplayName(currentUserProfile?.displayName),
-        googleName: normalizePersonName(
-          currentUserProfile?.googleName ||
-            currentUser.displayName ||
-            inferNameFromEmail(currentUser.email)
-        ),
-        routeId: normalizeRouteId(currentUserProfile?.routeId),
-        photoURL: downloadURL,
-        photoStoragePath: storagePath,
-        role: getCurrentUserRole(),
-        isAdmin: isElevatedRole(getCurrentUserRole()),
+        ...nextProfileData,
         updatedAt: serverTimestamp(),
         updatedByUid: currentUser.uid,
         updatedByEmail: currentUser.email || "",
@@ -3053,18 +3055,7 @@ async function handleProfileImageSubmit(event) {
 
     currentUserProfile = normalizeFriend({
       ...(currentUserProfile || {}),
-      uid: currentUser.uid,
-      email: currentUser.email || "",
-      displayName: normalizeDisplayName(currentUserProfile?.displayName),
-      googleName: normalizePersonName(
-        currentUserProfile?.googleName ||
-          currentUser.displayName ||
-          inferNameFromEmail(currentUser.email)
-      ),
-      routeId: normalizeRouteId(currentUserProfile?.routeId),
-      photoURL: downloadURL,
-      photoStoragePath: storagePath,
-      role: getCurrentUserRole(),
+      ...nextProfileData,
     });
 
     profileImageForm?.reset();
@@ -5319,6 +5310,83 @@ async function updatePresenceHeartbeat() {
   }
 }
 
+async function resolveWritableUserRouteId(user, userId) {
+  const normalizedUserId = String(userId || user?.uid || user?.id || "");
+  const currentRouteId = normalizeRouteId(user?.routeId);
+
+  if (
+    currentRouteId &&
+    !(await isRouteIdTaken(currentRouteId, normalizedUserId))
+  ) {
+    return currentRouteId;
+  }
+
+  return ensureUniqueRouteId("", normalizedUserId);
+}
+
+async function resolveSelfProfileRouteId(inputValue, existingRouteId, userId) {
+  const routeInput = String(inputValue || "").trim();
+  const requestedRouteId = normalizeRouteId(routeInput);
+
+  if (routeInput && !requestedRouteId) {
+    return { error: STRINGS.profile.routeInvalid, routeId: "" };
+  }
+
+  if (requestedRouteId) {
+    const routeId = await ensureUniqueRouteId(requestedRouteId, userId);
+
+    if (routeId !== requestedRouteId) {
+      return { error: STRINGS.profile.routeTaken, routeId: "" };
+    }
+
+    return { error: "", routeId };
+  }
+
+  return {
+    error: "",
+    routeId: await resolveWritableUserRouteId({ routeId: existingRouteId }, userId),
+  };
+}
+
+function buildUserRecordPayload(user, overrides = {}) {
+  const email = String(
+    hasOwnProperty(overrides, "email") ? overrides.email : user?.email || ""
+  ).trim();
+  const role = resolveStoredUserRole(
+    hasOwnProperty(overrides, "role") ? overrides.role : user?.role,
+    email
+  );
+  const photoStoragePath = String(
+    hasOwnProperty(overrides, "photoStoragePath")
+      ? overrides.photoStoragePath
+      : user?.photoStoragePath || ""
+  );
+  const photoURL = String(
+    hasOwnProperty(overrides, "photoURL") ? overrides.photoURL : user?.photoURL || ""
+  );
+  const googleName = normalizePersonName(
+    hasOwnProperty(overrides, "googleName")
+      ? overrides.googleName
+      : user?.googleName || getFriendGoogleName({ ...user, email })
+  );
+
+  return {
+    uid: String(hasOwnProperty(overrides, "uid") ? overrides.uid : user?.uid || user?.id || ""),
+    email,
+    displayName: normalizeDisplayName(
+      hasOwnProperty(overrides, "displayName") ? overrides.displayName : user?.displayName
+    ),
+    googleName: googleName || inferNameFromEmail(email),
+    routeId: normalizeRouteId(
+      hasOwnProperty(overrides, "routeId") ? overrides.routeId : user?.routeId
+    ),
+    photoURL: photoStoragePath ? photoURL : "",
+    photoStoragePath,
+    role,
+    isAdmin: isElevatedRole(role),
+  };
+}
+
 async function handleProfileDetailsSubmit(event) {
   event.preventDefault();
 
@@ -5337,42 +5405,40 @@ async function handleProfileDetailsSubmit(event) {
   }
 
   const nextDisplayName = normalizeDisplayName(profileDisplayNameInput?.value);
-  let routeId = normalizeRouteId(targetFriend.routeId);
-
-  if (isEditingSelf) {
-    const requestedRouteId = normalizeRouteId(profileRouteInput?.value);
-
-    if (!isValidRouteId(requestedRouteId)) {
-      authDetail.textContent = STRINGS.profile.routeInvalid;
-      return;
-    }
-
-    routeId = await ensureUniqueRouteId(requestedRouteId, currentUser.uid);
-
-    if (routeId !== requestedRouteId) {
-      authDetail.textContent = STRINGS.profile.routeTaken;
-      return;
-    }
-  }
 
   profileDetailsSubmit?.toggleAttribute("disabled", true);
 
   try {
+    let routeId = normalizeRouteId(targetFriend.routeId);
+
+    if (isEditingSelf) {
+      const routeResult = await resolveSelfProfileRouteId(
+        profileRouteInput?.value,
+        targetFriend.routeId,
+        currentUser.uid
+      );
+
+      if (routeResult.error) {
+        authDetail.textContent = routeResult.error;
+        profileDetailsSubmit?.toggleAttribute("disabled", false);
+        return;
+      }
+
+      routeId = routeResult.routeId;
+    } else {
+      routeId = await resolveWritableUserRouteId(targetFriend, targetFriend.uid);
+    }
+
+    const nextProfileData = buildUserRecordPayload(targetFriend, {
+      uid: targetFriend.uid,
+      displayName: nextDisplayName,
+      routeId,
+    });
+
     await setDoc(
       doc(db, runtimeConfig.collections.users, targetFriend.uid),
       {
-        uid: targetFriend.uid,
-        email: targetFriend.email || "",
-        displayName: nextDisplayName,
-        googleName: normalizePersonName(
-          targetFriend.googleName ||
-            getFriendGoogleName(targetFriend)
-        ),
-        routeId,
-        photoURL: targetFriend.photoStoragePath ? targetFriend.photoURL || "" : "",
-        photoStoragePath: targetFriend.photoStoragePath || "",
-        role: targetFriend.role || ROLE_FRIEND,
-        isAdmin: isElevatedRole(targetFriend.role || ROLE_FRIEND),
+        ...nextProfileData,
         updatedAt: serverTimestamp(),
         updatedByUid: currentUser.uid,
         updatedByEmail: currentUser.email || "",
@@ -5385,17 +5451,7 @@ async function handleProfileDetailsSubmit(event) {
         entry.uid === targetFriend.uid
           ? normalizeFriend({
               ...entry,
-              uid: targetFriend.uid,
-              email: targetFriend.email || "",
-              displayName: nextDisplayName,
-              googleName: normalizePersonName(
-                targetFriend.googleName ||
-                  getFriendGoogleName(targetFriend)
-              ),
-              routeId,
-              photoURL: targetFriend.photoStoragePath ? targetFriend.photoURL || "" : "",
-              photoStoragePath: targetFriend.photoStoragePath || "",
-              role: targetFriend.role || ROLE_FRIEND,
+              ...nextProfileData,
             })
           : entry
       )
@@ -5404,15 +5460,7 @@ async function handleProfileDetailsSubmit(event) {
     if (targetFriend.uid === currentUser.uid && currentUserProfile) {
       currentUserProfile = normalizeFriend({
         ...currentUserProfile,
-        uid: currentUser.uid,
-        email: currentUser.email || "",
-        displayName: nextDisplayName,
-        googleName: normalizePersonName(
-          currentUserProfile.googleName ||
-            currentUser.displayName ||
-            inferNameFromEmail(currentUser.email)
-        ),
-        routeId,
+        ...nextProfileData,
       });
     }
 
@@ -7804,6 +7852,18 @@ function getNewMediaNotificationsForFolder(tripId, folderId) {
     (entry) =>
       entry.tripId === String(tripId || "") &&
       entry.folderId === String(folderId || "")
+  );
+}
+
+function getNewMediaNotificationItemKeysForDisplayFolder(tripId, folderId) {
+  const notifications = isHighlightFolder(folderId)
+    ? getNewMediaNotificationsForTrip(tripId)
+    : getNewMediaNotificationsForFolder(tripId, folderId);
+
+  return new Set(
+    notifications
+      .map((entry) => buildMediaItemKey(entry.tripId, entry.folderId, entry.itemId))
+      .filter(Boolean)
   );
 }
 
@@ -11018,16 +11078,17 @@ async function handleRoleSelectChange(event) {
   select.disabled = true;
 
   try {
+    const routeId = await resolveWritableUserRouteId(friend, userId);
+    const nextProfileData = buildUserRecordPayload(friend, {
+      uid: friend.uid || userId,
+      role: roleToStore,
+      routeId,
+    });
+
     await setDoc(
       doc(db, runtimeConfig.collections.users, userId),
       {
-        uid: friend.uid || userId,
-        email: friend.email,
-        displayName: friend.displayName || "",
-        photoURL: friend.photoStoragePath ? friend.photoURL || "" : "",
-        photoStoragePath: friend.photoStoragePath || "",
-        role: roleToStore,
-        isAdmin: isElevatedRole(roleToStore),
+        ...nextProfileData,
         updatedAt: serverTimestamp(),
         updatedByUid: currentUser?.uid || "",
         updatedByEmail: currentUser?.email || "",
@@ -12067,18 +12128,17 @@ async function handleFriendDisplayNameEditClick(trigger) {
   trigger.disabled = true;
 
   try {
+    const routeId = await resolveWritableUserRouteId(friend, userId);
+    const nextProfileData = buildUserRecordPayload(friend, {
+      uid: friend.uid || userId,
+      displayName: nextDisplayName,
+      routeId,
+    });
+
     await setDoc(
       doc(db, runtimeConfig.collections.users, userId),
       {
-        uid: friend.uid || userId,
-        email: friend.email || "",
-        displayName: nextDisplayName,
-        googleName: normalizePersonName(friend.googleName || getFriendGoogleName(friend)),
-        routeId: normalizeRouteId(friend.routeId),
-        photoURL: friend.photoStoragePath ? friend.photoURL || "" : "",
-        photoStoragePath: friend.photoStoragePath || "",
-        role: friend.role || ROLE_FRIEND,
-        isAdmin: isElevatedRole(friend.role || ROLE_FRIEND),
+        ...nextProfileData,
         updatedAt: serverTimestamp(),
         updatedByUid: currentUser?.uid || "",
         updatedByEmail: currentUser?.email || "",
@@ -12089,7 +12149,7 @@ async function handleFriendDisplayNameEditClick(trigger) {
     if (currentUser?.uid === userId && currentUserProfile) {
       currentUserProfile = normalizeFriend({
         ...currentUserProfile,
-        displayName: nextDisplayName,
+        ...nextProfileData,
       });
     }
 
@@ -15247,7 +15307,11 @@ async function loadAllFolderItemsForTrip(tripId, folders) {
 
 function getSortedItemsForFolder(tripId, folderId, sortMode = ITEM_SORT_MEDIA_DATE_ASC) {
   const items = getItemsForFolder(tripId, folderId);
-  return [...items].sort((left, right) => compareItems(left, right, sortMode, tripId, folderId));
+  const notificationItemKeys = getNewMediaNotificationItemKeysForDisplayFolder(tripId, folderId);
+
+  return [...items].sort((left, right) =>
+    compareItemsForDisplay(left, right, sortMode, tripId, folderId, notificationItemKeys)
+  );
 }
 
 function renderItemSortOptions(selectedMode) {
@@ -15280,6 +15344,36 @@ function normalizeItemSortMode(value) {
   ].includes(value)
     ? value
     : ITEM_SORT_MEDIA_DATE_ASC;
+}
+
+function compareItemsForDisplay(left, right, sortMode, tripId = "", folderId = "", notificationItemKeys = new Set()) {
+  const notificationComparison = compareMediaNotificationSortPriority(
+    left,
+    right,
+    tripId,
+    folderId,
+    notificationItemKeys
+  );
+
+  if (notificationComparison !== 0) {
+    return notificationComparison;
+  }
+
+  return compareItems(left, right, sortMode, tripId, folderId);
+}
+
+function compareMediaNotificationSortPriority(left, right, tripId, folderId, notificationItemKeys) {
+  return getMediaNotificationSortPriority(left, tripId, folderId, notificationItemKeys) -
+    getMediaNotificationSortPriority(right, tripId, folderId, notificationItemKeys);
+}
+
+function getMediaNotificationSortPriority(item, tripId, folderId, notificationItemKeys) {
+  if (item?.kind !== "file" || !notificationItemKeys?.size) {
+    return 0;
+  }
+
+  const itemKey = buildMediaItemKeyFromItem(item, tripId, folderId);
+  return itemKey && notificationItemKeys.has(itemKey) ? -1 : 0;
 }
 
 function compareItems(left, right, sortMode, tripId = "", folderId = "") {
