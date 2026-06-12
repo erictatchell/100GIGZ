@@ -25,6 +25,38 @@ import {
 } from "../public/static/modules/core/utils.js";
 
 const readText = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+const publicPageChecks = [
+  {
+    path: "/about",
+    file: "public/about.html",
+    title: "About | 100GIGZ",
+    marker: "Google Sign-In is used to authenticate members",
+  },
+  {
+    path: "/privacy",
+    file: "public/privacy.html",
+    title: "Privacy Policy | 100GIGZ",
+    marker: "This privacy page is public",
+  },
+  {
+    path: "/terms",
+    file: "public/terms.html",
+    title: "Terms of Service | 100GIGZ",
+    marker: "This terms page is public",
+  },
+  {
+    path: "/tos",
+    file: "public/terms.html",
+    title: "Terms of Service | 100GIGZ",
+    marker: "This terms page is public",
+  },
+  {
+    path: "/contact",
+    file: "public/contact.html",
+    title: "Contact | 100GIGZ",
+    marker: "This contact page is public",
+  },
+];
 
 test("core utility module preserves app-facing behavior", () => {
   assert.equal(normalizeDisplayName("  Eric   Tatch  "), "Eric Tatch");
@@ -141,13 +173,18 @@ test("critical delegated actions remain present in rendered/static source", asyn
   }
 });
 
-test("privacy policy is a standalone public page", async () => {
-  const privacy = await readText("public/privacy.html");
+test("public Google branding pages are standalone and ungated", async () => {
+  for (const page of publicPageChecks) {
+    const html = await readText(page.file);
 
-  assert.match(privacy, /<title>Privacy Policy \| 100GIGZ<\/title>/);
-  assert.match(privacy, /This privacy page is public/);
-  assert.doesNotMatch(privacy, /\/static\/app\.js/);
-  assert.doesNotMatch(privacy, /id="vault-gate"/);
+    assert.match(html, new RegExp(`<title>${escapeRegExp(page.title)}<\\/title>`));
+    assert.match(html, new RegExp(escapeRegExp(page.marker)));
+    assert.match(html, /href="\/privacy"/);
+    assert.match(html, /href="\/terms"/);
+    assert.match(html, /href="\/contact"/);
+    assert.doesNotMatch(html, /\/static\/app\.js/);
+    assert.doesNotMatch(html, /id="vault-gate"/);
+  }
 });
 
 test("server smoke: SPA routes and static modules are served", async (t) => {
@@ -169,11 +206,14 @@ test("server smoke: SPA routes and static modules are served", async (t) => {
   const config = await fetch(`${baseUrl}/api/config`);
   assert.equal(config.status, 403);
 
-  const privacy = await fetch(`${baseUrl}/privacy`);
-  assert.equal(privacy.status, 200);
-  const privacyHtml = await privacy.text();
-  assert.match(privacyHtml, /Privacy Policy \| 100GIGZ/);
-  assert.doesNotMatch(privacyHtml, /id="vault-gate"/);
+  for (const page of publicPageChecks) {
+    const response = await fetch(`${baseUrl}${page.path}`);
+    assert.equal(response.status, 200, `${page.path} should be public`);
+    const html = await response.text();
+    assert.match(html, new RegExp(escapeRegExp(page.title)));
+    assert.doesNotMatch(html, /id="vault-gate"/);
+    assert.doesNotMatch(html, /\/static\/app\.js/);
+  }
 
   const feed = await fetch(`${baseUrl}/feed`);
   assert.equal(feed.status, 200);
@@ -187,3 +227,7 @@ test("server smoke: SPA routes and static modules are served", async (t) => {
   assert.equal(module.status, 200);
   assert.match(await module.text(), /export function escapeHtml/);
 });
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

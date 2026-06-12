@@ -8,6 +8,7 @@ const workspaceRoot = process.cwd();
 const publicRoot = path.join(workspaceRoot, "public");
 const staticRoot = existsSync(path.join(publicRoot, "index.html")) ? publicRoot : workspaceRoot;
 const envPath = path.join(workspaceRoot, ".env");
+const staticRouteAliases = new Map([["/tos", "/terms.html"]]);
 
 loadEnvFile(envPath);
 loadEnvFile(path.join(workspaceRoot, ".env.local"));
@@ -181,8 +182,11 @@ if (!safeEqualString(submittedPassword, getVaultPassword())) {
 }
 
 async function serveStaticFile(request, pathname, response) {
+  const staticRouteAlias = staticRouteAliases.get(pathname);
   let targetPath =
-    pathname === "/404" ? resolveStaticPath("/404.html") : resolveStaticPath(pathname);
+    pathname === "/404"
+      ? resolveStaticPath("/404.html")
+      : resolveStaticPath(staticRouteAlias || pathname);
 
   if (!targetPath) {
     return sendText(response, 403, "Forbidden");

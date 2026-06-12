@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="100GIGZ privacy policy for Google sign-in, Firebase-backed account data, archive content, and contact requests.">
-  <link rel="canonical" href="/privacy">
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.ico">
-  <title>Privacy Policy | 100GIGZ</title>
+  <meta name="description" content="100GIGZ terms of service for invited members using the private media archive.">
+  <link rel="canonical" href="https://100gigz.ca/terms">
+  <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+  <title>Terms of Service | 100GIGZ</title>
   <style>
     :root {
       color-scheme: dark;
@@ -32,7 +32,6 @@
         var(--bg);
       color: var(--text);
       font-family: "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
-      letter-spacing: 0;
     }
 
     body::before {
@@ -51,6 +50,7 @@
     }
 
     main {
+      position: relative;
       width: min(100%, 920px);
       margin: 0 auto;
       padding: 32px 18px 56px;
@@ -63,7 +63,8 @@
 
     .eyebrow,
     .updated,
-    nav a {
+    nav a,
+    footer {
       font-family: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
       text-transform: uppercase;
       letter-spacing: 0.18em;
@@ -80,6 +81,7 @@
       font-size: clamp(3rem, 14vw, 7.25rem);
       line-height: 0.82;
       text-transform: uppercase;
+      overflow-wrap: anywhere;
     }
 
     .updated {
@@ -96,7 +98,7 @@
     }
 
     nav a,
-    .contact-link {
+    .text-link {
       color: var(--text);
       text-decoration: none;
     }
@@ -110,8 +112,8 @@
 
     nav a:hover,
     nav a:focus-visible,
-    .contact-link:hover,
-    .contact-link:focus-visible {
+    .text-link:hover,
+    .text-link:focus-visible {
       color: var(--accent);
       border-color: rgba(255, 255, 255, 0.32);
     }
@@ -144,14 +146,15 @@
       padding-left: 1.2rem;
     }
 
+    li + li {
+      margin-top: 8px;
+    }
+
     footer {
       padding-top: 24px;
       color: var(--soft);
-      font-family: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
       font-size: 0.72rem;
       line-height: 1.7;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
     }
   </style>
 </head>
@@ -159,9 +162,9 @@
   <main>
     <header>
       <p class="eyebrow">100GIGZ</p>
-      <h1>Privacy Policy</h1>
+      <h1>Terms of Service</h1>
       <p class="updated">Last updated June 7, 2026</p>
-      <nav aria-label="Policy navigation">
+      <nav aria-label="Site navigation">
         <a href="/about">About</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
@@ -170,51 +173,51 @@
     </header>
 
     <section>
-      <h2>What 100GIGZ Collects</h2>
+      <h2>Private Archive Access</h2>
       <p>
-        100GIGZ is a private archive experience. If you use Google sign-in, the site may receive the basic Google account details you authorize, including your email address, profile name, and profile photo.
+        100GIGZ is a private media archive for invited members. By accessing the service, you agree to use it only for authorized archive viewing, uploading, organizing, commenting, and member interaction.
       </p>
       <p>
-        The site also stores the content you choose to create or upload, such as archive posts, profile details, comments, and media files.
-      </p>
-    </section>
-
-    <section>
-      <h2>How Information Is Used</h2>
-      <p>
-        Information is used only to authenticate access, display member identity, manage archive permissions, operate storage, and support moderation inside the service.
-      </p>
-      <p>
-        100GIGZ does not sell personal information and does not use Google user data for advertising.
+        Access may require a vault key, Google Sign-In, and account permission. You are responsible for keeping access credentials private.
       </p>
     </section>
 
     <section>
-      <h2>Google and Firebase Data</h2>
+      <h2>Member Conduct</h2>
+      <ul>
+        <li>Do not share archive access with people who are not authorized members.</li>
+        <li>Do not upload content you do not have permission to share.</li>
+        <li>Do not harass, impersonate, or misuse another member's identity.</li>
+        <li>Do not attempt to bypass Firebase, account, or vault access controls.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Uploaded Content</h2>
       <p>
-        Account records and uploaded content are processed through Google Firebase services used to run the site. Google sign-in is used only to verify identity and support account access inside 100GIGZ.
+        You remain responsible for photos, videos, comments, profile details, and other content you add to 100GIGZ. Content shared inside the archive may be visible to other authorized users with access to the same areas.
       </p>
       <p>
-        The site uses the basic account identity information needed for authentication and profile display, including standard email and profile details provided through Google and Firebase Authentication.
+        100GIGZ may remove content or restrict access when needed to protect the archive, comply with requests, or maintain member privacy and safety.
       </p>
     </section>
 
     <section>
-      <h2>Visibility and Sharing</h2>
+      <h2>Google Sign-In</h2>
       <p>
-        Content shared inside the archive may be visible to other authorized users with access to the same areas. The service uses layered access controls including the vault password, authenticated user access, and Firebase-backed data rules.
+        Google Sign-In is used to authenticate members and display basic profile identity inside the archive. Use of account data is described in the <a class="text-link" href="/privacy">100GIGZ Privacy Policy</a>.
       </p>
     </section>
 
     <section>
-      <h2>Access, Correction, and Deletion</h2>
+      <h2>Changes and Contact</h2>
       <p>
-        If you want to request access, correction, or deletion of your account information or uploaded content, email <a class="contact-link" href="mailto:erictatch@gmail.com?subject=100GIGZ%20privacy%20request">erictatch@gmail.com</a>.
+        These terms may be updated as the service changes. Questions about these terms, account access, or archive content can be sent through the <a class="text-link" href="/contact">contact page</a>.
       </p>
     </section>
 
     <footer>
-      This privacy page is public and does not require vault access or Google sign-in.
+      This terms page is public and does not require vault access or Google sign-in.
     </footer>
   </main>
 </body>

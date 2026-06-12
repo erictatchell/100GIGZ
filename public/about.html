@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="description"
+    content="Learn about 100GIGZ, a private media archive for invited members to securely organize, upload, view, and interact with shared photos and videos."
+  >
+
+  <link rel="canonical" href="https://100gigz.ca/about">
+  <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+
+  <title>About | 100GIGZ</title>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050505;
+      --panel: rgba(255, 255, 255, 0.035);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: rgba(245, 245, 244, 0.92);
+      --muted: rgba(214, 211, 209, 0.68);
+      --soft: rgba(168, 162, 158, 0.5);
+      --accent: rgba(255, 255, 255, 0.95);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0.04),
+          transparent 18rem
+        ),
+        radial-gradient(
+          circle at top,
+          rgba(255, 255, 255, 0.08),
+          transparent 24rem
+        ),
+        var(--bg);
+      color: var(--text);
+      font-family: "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.025) 0,
+        rgba(255, 255, 255, 0.025) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      opacity: 0.4;
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 920px);
+      margin: 0 auto;
+      padding: 32px 18px 56px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      padding: 22px 0 24px;
+    }
+
+    .eyebrow,
+    .updated,
+    nav a,
+    .status,
+    footer {
+      font-family: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--soft);
+      font-size: 0.72rem;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 100%;
+      font-size: clamp(3rem, 14vw, 7.25rem);
+      line-height: 0.82;
+      text-transform: uppercase;
+      overflow-wrap: anywhere;
+    }
+
+    .updated {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    nav a,
+    .text-link,
+    .contact-link {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    nav a {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 10px 12px;
+      font-size: 0.68rem;
+    }
+
+    nav a:hover,
+    nav a:focus-visible,
+    .text-link:hover,
+    .text-link:focus-visible,
+    .contact-link:hover,
+    .contact-link:focus-visible {
+      color: var(--accent);
+    }
+
+    nav a:hover,
+    nav a:focus-visible {
+      border-color: rgba(255, 255, 255, 0.32);
+      background: rgba(255, 255, 255, 0.065);
+    }
+
+    .intro {
+      padding: 34px 0;
+    }
+
+    .intro p {
+      max-width: 760px;
+      color: var(--text);
+      font-size: clamp(1.15rem, 3vw, 1.55rem);
+      line-height: 1.55;
+    }
+
+    section {
+      border-bottom: 1px solid var(--line);
+      padding: 28px 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: clamp(1.65rem, 7vw, 2.7rem);
+      line-height: 0.9;
+      text-transform: uppercase;
+    }
+
+    p,
+    li {
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.7;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .status-card {
+      min-height: 120px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    .status {
+      display: block;
+      margin-bottom: 16px;
+      color: var(--soft);
+      font-size: 0.62rem;
+    }
+
+    .status-card strong {
+      display: block;
+      color: var(--text);
+      font-size: 1rem;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+
+    .contact-panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 18px;
+    }
+
+    .contact-panel p {
+      margin-bottom: 8px;
+    }
+
+    footer {
+      padding-top: 24px;
+      color: var(--soft);
+      font-size: 0.72rem;
+      line-height: 1.7;
+    }
+
+    @media (max-width: 680px) {
+      main {
+        padding-top: 18px;
+      }
+
+      header {
+        padding-top: 16px;
+      }
+
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .status-card {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">100GIGZ</p>
+
+      <h1>About</h1>
+
+      <p class="updated">Private archive system</p>
+
+      <nav aria-label="Site navigation">
+        <a href="/">Enter Archive</a>
+        <a href="/about">About</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/contact">Contact</a>
+      </nav>
+    </header>
+
+    <section class="intro">
+      <p>
+        100GIGZ is a private media archive that allows invited members to
+        securely view, upload, organize, comment on, and interact with shared
+        photos and videos. Google Sign-In is used to authenticate members and
+        display their basic profile identity.
+      </p>
+    </section>
+
+    <section>
+      <h2>What 100GIGZ Is</h2>
+
+      <p>
+        100GIGZ was created as a private place for preserving shared memories,
+        trips, videos, photos, and other media in an organized archive.
+      </p>
+
+      <p>
+        The service is not a public social network. Access is limited to
+        approved or invited members, and archive content is intended only for
+        the people authorized to view it.
+      </p>
+    </section>
+
+    <section>
+      <h2>What Members Can Do</h2>
+
+      <ul>
+        <li>Sign in securely using a Google account.</li>
+        <li>View photos, videos, posts, trips, and archive collections.</li>
+        <li>Upload and organize media where permission is provided.</li>
+        <li>Maintain a member profile within the archive.</li>
+        <li>Like, comment on, and interact with shared content.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Google Sign-In</h2>
+
+      <p>
+        Google Sign-In is used to authenticate members and provide basic
+        account identity information, such as a member's name, email address,
+        and profile photo.
+      </p>
+
+      <p>
+        Google account information is used only to support authentication,
+        member identification, account access, and profile display inside
+        100GIGZ.
+      </p>
+
+      <p>
+        100GIGZ does not use Google user data for advertising and does not sell
+        personal information.
+      </p>
+    </section>
+
+    <section>
+      <h2>Access and Security</h2>
+
+      <p>
+        100GIGZ uses layered access controls designed to prevent archive
+        content from being publicly accessible. These controls may include a
+        vault access key, authenticated member accounts, account permissions,
+        and Firebase security rules.
+      </p>
+
+      <div class="status-grid" aria-label="Service characteristics">
+        <div class="status-card">
+          <span class="status">Access</span>
+          <strong>Invited members only</strong>
+        </div>
+
+        <div class="status-card">
+          <span class="status">Authentication</span>
+          <strong>Google Sign-In</strong>
+        </div>
+
+        <div class="status-card">
+          <span class="status">Purpose</span>
+          <strong>Private media archive</strong>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Privacy and Data</h2>
+
+      <p>
+        Details about the information 100GIGZ collects, how it is used, and how
+        members can request deletion are available in the
+        <a class="text-link" href="/privacy">100GIGZ Privacy Policy</a>.
+      </p>
+
+      <p>
+        Use of the service is also subject to the
+        <a class="text-link" href="/terms">100GIGZ Terms of Service</a>.
+      </p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+
+      <div class="contact-panel">
+        <p>
+          Questions about 100GIGZ, account access, privacy, or archive content
+          can be sent to:
+        </p>
+
+        <p>
+          <a
+            class="contact-link"
+            href="mailto:erictatch@gmail.com?subject=100GIGZ%20contact"
+          >
+            erictatch@gmail.com
+          </a>
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      This page is publicly accessible and does not require vault access or
+      Google Sign-In.
+    </footer>
+  </main>
+</body>
+</html>
