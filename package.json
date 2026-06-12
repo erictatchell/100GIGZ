@@ -7,12 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check static/app.js && node --check static/strings.js",
+    "check": "node --check server.js && node --check public/static/app.js && node --check public/static/strings.js && node --check public/static/modules/core/utils.js && node --check functions/index.js",
     "smoke": "node --preserve-symlinks --input-type=module -e \"await import('./tests/smoke.test.mjs')\"",
     "test": "npm run check && npm run smoke"
-  },
-  "dependencies": {
-    "firebase": "^12.14.0",
-    "vercel": "^54.9.1"
   }
 }

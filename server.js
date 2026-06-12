@@ -189,6 +189,14 @@ async function serveStaticFile(request, pathname, response) {
   }
 
   if (!existsSync(targetPath)) {
+    const cleanUrlTargetPath = resolveCleanUrlPath(pathname);
+
+    if (cleanUrlTargetPath && existsSync(cleanUrlTargetPath)) {
+      targetPath = cleanUrlTargetPath;
+    }
+  }
+
+  if (!existsSync(targetPath)) {
     if (shouldServeSpaShell(pathname)) {
       targetPath = resolveStaticPath("/index.html");
     } else {
@@ -259,6 +267,14 @@ function resolveStaticPath(pathname) {
   }
 
   return absolutePath;
+}
+
+function resolveCleanUrlPath(pathname) {
+  if (!pathname || pathname.endsWith("/") || path.extname(pathname)) {
+    return null;
+  }
+
+  return resolveStaticPath(`${pathname}.html`);
 }
 
 function getContentType(extension) {

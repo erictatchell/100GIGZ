@@ -11,7 +11,7 @@ const DEFAULT_PUBLIC_CONFIG = {
   adminEmails: ["erictatch@gmail.com"],
   firebaseConfig: {
     apiKey: "AIzaSyCuJNvQ7PmfC1j-IJ19u6VaYy1cPq4ipCk",
-    authDomain: "mgc-1-9f15d.firebaseapp.com",
+    authDomain: "100gigz.ca",
     projectId: "mgc-1-9f15d",
     storageBucket: "mgc-1-9f15d.firebasestorage.app",
     messagingSenderId: "513728179403",

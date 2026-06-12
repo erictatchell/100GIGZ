@@ -22,7 +22,7 @@ import {
   simplifyMimeType,
   slugifyFolder,
   slugifyTrip,
-} from "../static/modules/core/utils.js";
+} from "../public/static/modules/core/utils.js";
 
 const readText = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -65,8 +65,8 @@ test("storage filename helper keeps extension and safe base", () => {
 });
 
 test("app source imports the extracted core utility module", async () => {
-  const appSource = await readText("static/app.js");
-  const html = await readText("index.html");
+  const appSource = await readText("public/static/app.js");
+  const html = await readText("public/index.html");
 
   assert.match(html, /<script type="module" src="\/static\/app\.js"><\/script>/);
   assert.doesNotMatch(html, /src="\/app\.js"/);
@@ -82,15 +82,15 @@ test("app source imports the extracted core utility module", async () => {
     assert.doesNotMatch(
       appSource,
       new RegExp(`function\\s+${functionName}\\s*\\(`),
-      `${functionName} should live in static/modules/core/utils.js`
+      `${functionName} should live in public/static/modules/core/utils.js`
     );
   }
 });
 
 test("HTML still provides every hard DOM id app.js requests", async () => {
   const [html, appSource] = await Promise.all([
-    readText("index.html"),
-    readText("static/app.js"),
+    readText("public/index.html"),
+    readText("public/static/app.js"),
   ]);
   const optionalLegacyIds = new Set([
     // These hooks are optional in the current HTML shell and remain guarded by optional chaining.
@@ -119,8 +119,8 @@ test("HTML still provides every hard DOM id app.js requests", async () => {
 
 test("critical delegated actions remain present in rendered/static source", async () => {
   const [html, appSource] = await Promise.all([
-    readText("index.html"),
-    readText("static/app.js"),
+    readText("public/index.html"),
+    readText("public/static/app.js"),
   ]);
   const source = `${html}\n${appSource}`;
 
@@ -141,6 +141,15 @@ test("critical delegated actions remain present in rendered/static source", asyn
   }
 });
 
+test("privacy policy is a standalone public page", async () => {
+  const privacy = await readText("public/privacy.html");
+
+  assert.match(privacy, /<title>Privacy Policy \| 100GIGZ<\/title>/);
+  assert.match(privacy, /This privacy page is public/);
+  assert.doesNotMatch(privacy, /\/static\/app\.js/);
+  assert.doesNotMatch(privacy, /id="vault-gate"/);
+});
+
 test("server smoke: SPA routes and static modules are served", async (t) => {
   const server = createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -159,6 +168,12 @@ test("server smoke: SPA routes and static modules are served", async (t) => {
 
   const config = await fetch(`${baseUrl}/api/config`);
   assert.equal(config.status, 403);
+
+  const privacy = await fetch(`${baseUrl}/privacy`);
+  assert.equal(privacy.status, 200);
+  const privacyHtml = await privacy.text();
+  assert.match(privacyHtml, /Privacy Policy \| 100GIGZ/);
+  assert.doesNotMatch(privacyHtml, /id="vault-gate"/);
 
   const feed = await fetch(`${baseUrl}/feed`);
   assert.equal(feed.status, 200);

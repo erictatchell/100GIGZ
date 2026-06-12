@@ -130,12 +130,12 @@ export const STRINGS = {
   errors: {
     initFailed: "Initialization failed.",
     apiReturnedHtml:
-      "HOSTED API RETURNED HTML INSTEAD OF JSON. REDEPLOY VERCEL SO /API IS NOT REWRITTEN TO INDEX.HTML.",
+      "HOSTED API RETURNED HTML INSTEAD OF JSON. REDEPLOY FIREBASE SO /API IS ROUTED TO THE FUNCTION.",
     apiReturnedInvalidJson: "HOSTED API RETURNED INVALID JSON.",
     vaultStatusFailed:
       "COULD NOT LOAD VAULT STATUS. CHECK THE HOSTED /API/Vault/STATUS FUNCTION, THEN REDEPLOY.",
     vaultPasswordMissingHosted:
-      "VAULT_PASSWORD IS NOT AVAILABLE TO THIS DEPLOYMENT. ADD IT TO THE CORRECT VERCEL ENVIRONMENT AND REDEPLOY.",
+      "VAULT_PASSWORD IS NOT AVAILABLE TO THIS DEPLOYMENT. ADD IT TO FIREBASE FUNCTIONS SECRETS AND REDEPLOY.",
     runtimeConfigMissing:
       "Runtime config is incomplete. Fill in the Firebase values in .env.",
     userSyncFailed: "Could not sync user record.",
