@@ -39,6 +39,12 @@ const publicPageChecks = [
     marker: "This privacy page is public",
   },
   {
+    path: "/policy",
+    file: "public/privacy.html",
+    title: "Privacy Policy | 100GIGZ",
+    marker: "This privacy page is public",
+  },
+  {
     path: "/terms",
     file: "public/terms.html",
     title: "Terms of Service | 100GIGZ",
@@ -179,12 +185,23 @@ test("public Google branding pages are standalone and ungated", async () => {
 
     assert.match(html, new RegExp(`<title>${escapeRegExp(page.title)}<\\/title>`));
     assert.match(html, new RegExp(escapeRegExp(page.marker)));
-    assert.match(html, /href="\/privacy"/);
-    assert.match(html, /href="\/terms"/);
-    assert.match(html, /href="\/contact"/);
+    assertPublicPageNav(html);
     assert.doesNotMatch(html, /\/static\/app\.js/);
     assert.doesNotMatch(html, /id="vault-gate"/);
   }
+});
+
+test("vault gate footer links directly to public policy pages", async () => {
+  const html = await readText("public/index.html");
+  const footerMatch = html.match(/<div class="mt-4 flex flex-wrap items-center justify-center gap-x-4[\s\S]*?<\/div>/);
+
+  assert.ok(footerMatch, "vault footer link area should exist");
+  assert.match(footerMatch[0], /href="\/policy"[\s\S]*Privacy/);
+  assert.match(footerMatch[0], /href="\/terms"[\s\S]*Terms/);
+  assert.doesNotMatch(footerMatch[0], /Site Info/);
+  assert.doesNotMatch(footerMatch[0], /Contact/);
+  assert.doesNotMatch(footerMatch[0], /Compliance/);
+  assert.doesNotMatch(footerMatch[0], /data-vault-legal-trigger/);
 });
 
 test("server smoke: SPA routes and static modules are served", async (t) => {
@@ -230,4 +247,11 @@ test("server smoke: SPA routes and static modules are served", async (t) => {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function assertPublicPageNav(html) {
+  const nav = html.match(/<nav\b[\s\S]*?<\/nav>/)?.[0] || "";
+  const hrefs = [...nav.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
+
+  assert.deepEqual(hrefs, ["/about", "/policy", "/terms", "/contact", "/"]);
 }

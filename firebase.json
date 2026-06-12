@@ -90,6 +90,10 @@
         "destination": "/privacy.html"
       },
       {
+        "source": "/policy",
+        "destination": "/privacy.html"
+      },
+      {
         "source": "/about",
         "destination": "/about.html"
       },

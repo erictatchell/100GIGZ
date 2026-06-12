@@ -8,7 +8,10 @@ const workspaceRoot = process.cwd();
 const publicRoot = path.join(workspaceRoot, "public");
 const staticRoot = existsSync(path.join(publicRoot, "index.html")) ? publicRoot : workspaceRoot;
 const envPath = path.join(workspaceRoot, ".env");
-const staticRouteAliases = new Map([["/tos", "/terms.html"]]);
+const staticRouteAliases = new Map([
+  ["/policy", "/privacy.html"],
+  ["/tos", "/terms.html"],
+]);
 
 loadEnvFile(envPath);
 loadEnvFile(path.join(workspaceRoot, ".env.local"));
