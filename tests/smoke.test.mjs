@@ -39,7 +39,7 @@ const publicPageChecks = [
     marker: "This privacy page is public",
   },
   {
-    path: "/policy",
+    path: "/privacy",
     file: "public/privacy.html",
     title: "Privacy Policy | 100GIGZ",
     marker: "This privacy page is public",
@@ -196,7 +196,7 @@ test("vault gate footer links directly to public policy pages", async () => {
   const footerMatch = html.match(/<div class="mt-4 flex flex-wrap items-center justify-center gap-x-4[\s\S]*?<\/div>/);
 
   assert.ok(footerMatch, "vault footer link area should exist");
-  assert.match(footerMatch[0], /href="\/policy"[\s\S]*Privacy/);
+  assert.match(footerMatch[0], /href="\/privacy"[\s\S]*Privacy/);
   assert.match(footerMatch[0], /href="\/terms"[\s\S]*Terms/);
   assert.doesNotMatch(footerMatch[0], /Site Info/);
   assert.doesNotMatch(footerMatch[0], /Contact/);
@@ -253,5 +253,5 @@ function assertPublicPageNav(html) {
   const nav = html.match(/<nav\b[\s\S]*?<\/nav>/)?.[0] || "";
   const hrefs = [...nav.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
 
-  assert.deepEqual(hrefs, ["/about", "/policy", "/terms", "/contact", "/"]);
+  assert.deepEqual(hrefs, ["/about", "/privacy", "/terms", "/contact", "/"]);
 }
